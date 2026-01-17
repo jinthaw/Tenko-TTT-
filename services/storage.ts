@@ -2,9 +2,9 @@ import { Pool } from '@neondatabase/serverless';
 import { TenkoRecord, User } from '../types';
 import { DRIVERS, TENKO_USERS } from '../constants';
 
-// *** เปลี่ยนมาใช้ Environment Variable เพื่อความปลอดภัยและการ Deploy บน Vercel ***
-// ใน Vercel Settings > Environment Variables ให้ตั้งชื่อว่า: VITE_DATABASE_URL
-const CONNECTION_STRING = (import.meta as any).env?.VITE_DATABASE_URL || "";
+// *** ใช้ Connection String ที่ระบุมา (Neon DB) ***
+// ระบบจะใช้ค่านี้ทันทีถ้าไม่มีการตั้งค่าใน Environment Variable
+const CONNECTION_STRING = (import.meta as any).env?.VITE_DATABASE_URL || "postgresql://neondb_owner:npg_w1kO2JcqYApL@ep-morning-river-a1vzrjva-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
 
 // Create a connection pool only if connection string is present
 const pool = new Pool({ connectionString: CONNECTION_STRING });

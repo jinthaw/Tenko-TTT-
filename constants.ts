@@ -1,6 +1,6 @@
 import { User } from './types';
 
-export const SYSTEM_VERSION = "tenko V.01  บริษัท ออโต้แครี่เออร์";
+export const SYSTEM_VERSION = "tenko V.01 (160126) บริษัท ออโต้แครี่เออร์";
 
 export const DRIVERS: { id: string; name: string }[] = [
   { id: "240", name: "นายนิรุท สาเกตุ" },
