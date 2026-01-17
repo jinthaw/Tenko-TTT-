@@ -16,17 +16,38 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   const [records, setRecords] = useState<TenkoRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'error'>('online');
 
   const fetchData = async () => {
       try {
-          // Attempt sync first
-          await StorageService.syncPendingData();
+          // Check explicit auth failure first
+          if (StorageService.getIsAuthFailed()) {
+              setConnectionStatus('error');
+          } else {
+             // Attempt sync
+             await StorageService.syncPendingData();
+             // If sync didn't throw and we are here, we might be online, 
+             // but we really know if getAll works from DB.
+             // StorageService.getAll swallows errors, so we rely on StorageService internal state if we wanted to be precise.
+             // For now, if getIsAuthFailed is false, we assume online or temporary offline.
+             setConnectionStatus('online');
+          }
           
           const data = await StorageService.getAll();
           setRecords(data);
           setPendingCount(StorageService.getPendingCount());
+
+          // Re-check after operations
+          if (StorageService.getIsAuthFailed()) {
+              setConnectionStatus('error');
+          } else if (StorageService.getPendingCount() > 0) {
+              // If we have pending count after sync, we are likely offline (network issue)
+              setConnectionStatus('offline');
+          }
+
       } catch(e) {
           console.error(e);
+          setConnectionStatus('offline');
       } finally {
           setIsLoading(false);
       }
@@ -105,6 +126,28 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
       });
   };
 
+  const renderConnectionBadge = () => {
+      if (connectionStatus === 'error') {
+          return (
+              <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                  <i className="fas fa-database"></i> DB Error
+              </div>
+          );
+      }
+      if (connectionStatus === 'offline' || pendingCount > 0) {
+          return (
+              <div className="flex items-center gap-2 bg-amber-400 text-black px-3 py-1 rounded-full text-xs font-bold animate-pulse shadow-sm">
+                  <i className="fas fa-wifi-slash"></i> Offline ({pendingCount})
+              </div>
+          );
+      }
+      return (
+          <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-100 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-bold">
+              <i className="fas fa-wifi"></i> Online
+          </div>
+      );
+  };
+
   if (view === 'checkin') return <CheckinForm user={user} onBack={() => setView('home')} onSubmitSuccess={handleDataUpdate} />;
   if (view === 'checkout') return <CheckoutForm user={user} record={todayRecord!} onBack={() => setView('home')} onSubmitSuccess={handleDataUpdate} />;
   if (view === 'history') return <DriverHistory user={user} records={records} onBack={() => setView('home')} fixStartTime={fixStartTime} />;
@@ -126,11 +169,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
               <Button variant="secondary" onClick={onLogout} className="border-white text-white hover:bg-white/20 hover:text-white">
                 <i className="fas fa-sign-out-alt"></i> ออก
               </Button>
-              {pendingCount > 0 && (
-                  <div className="flex items-center gap-2 bg-amber-400 text-black px-3 py-1 rounded-full text-xs font-bold animate-pulse">
-                      <i className="fas fa-wifi-slash"></i> Offline ({pendingCount})
-                  </div>
-              )}
+              {renderConnectionBadge()}
           </div>
         </div>
       </header>
