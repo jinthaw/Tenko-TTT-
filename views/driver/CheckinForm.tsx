@@ -135,14 +135,14 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
 
   return (
     <div className="h-full bg-slate-50 overflow-y-auto">
-      <div className="bg-white sticky top-0 z-20 px-6 py-4 shadow-sm flex justify-between items-center">
+      <div className="bg-white sticky top-0 z-20 px-4 md:px-6 py-4 shadow-sm flex justify-between items-center">
         <div>
             <h2 className="text-xl font-bold text-slate-800">เท็งโกะก่อนเริ่มงาน</h2>
         </div>
         <Button variant="secondary" onClick={onBack} size="sm">ย้อนกลับ</Button>
       </div>
 
-      <div className="max-w-3xl mx-auto p-6 pb-24">
+      <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24">
         <Card className="mb-4 bg-slate-100 border-slate-200">
             <h3 className="font-semibold text-slate-700 mb-1 flex items-center gap-2">
                 <i className="fas fa-clock text-slate-500"></i> เวลาเลิกงานล่าสุด
@@ -151,73 +151,74 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
         </Card>
 
         {renderSection('อาการทั่วไป', 'fa-heartbeat', (
-            <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-8">
                 {renderQuestion('1. มีอาการเหนื่อยล้า?', 'tired', 'tired_detail')}
-                {renderQuestion('2. มีอาการเจ็บป่วย?', 'sick', 'sick_detail', 'มี')}
-                {form.sick === 'มี' && (
-                    <div className="pl-4 border-l-2 border-slate-200 mb-4 space-y-3">
-                         {renderQuestion('ไปพบแพทย์หรือไม่?', 'seen_doctor', 'seen_doctor_detail', 'มี')}
-                    </div>
-                )}
+                <div>
+                    {renderQuestion('2. มีอาการเจ็บป่วย?', 'sick', 'sick_detail', 'มี')}
+                    {form.sick === 'มี' && (
+                        <div className="pl-4 border-l-2 border-slate-200 mt-2 space-y-3">
+                            {renderQuestion('ไปพบแพทย์หรือไม่?', 'seen_doctor', 'seen_doctor_detail', 'มี')}
+                        </div>
+                    )}
+                </div>
                 {renderQuestion('3. มีอาการง่วงนอน?', 'drowsy', 'drowsy_detail')}
                 {renderQuestion('4. มีอาการบาดเจ็บ?', 'injury', 'injury_detail')}
                 {renderQuestion('5. ทานยาที่ส่งผลต่อการขับขี่?', 'medication', 'medication_name', 'ทาน', ['ทาน', 'ไม่ทาน'])}
                 {renderQuestion('6. สภาพร่างกาย?', 'body_condition', 'body_condition_detail', 'ไม่ปกติ', ['ปกติ', 'ไม่ปกติ'])}
-            </>
+            </div>
         ))}
 
         {renderSection('การนอนหลับ', 'fa-bed', (
-            <>
-                <h4 className="font-bold text-slate-700 mb-2">7. การนอนปกติ</h4>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                    <Input type="time" label="เริ่มนอน" value={form.sleep_start || ''} onChange={e => handleSleepChange('sleep', 'start', e.target.value)} />
-                    <Input type="time" label="ตื่น" value={form.sleep_end || ''} onChange={e => handleSleepChange('sleep', 'end', e.target.value)} />
-                </div>
-                <div className={`p-3 rounded-lg text-center font-bold text-lg mb-4 border-2 ${
-                    (form.sleep_hours || 0) < 6 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
-                }`}>
-                    รวม {form.sleep_hours?.toFixed(1) || 0} ชั่วโมง
-                </div>
-                {renderQuestion('คุณภาพการนอน', 'sleep_quality', 'sleep_quality_detail', 'ไม่สนิท', ['หลับสนิท', 'ไม่สนิท'])}
-                
-                <hr className="my-4"/>
-
-                <h4 className="font-bold text-slate-700 mb-2">8. การนอนเพิ่ม</h4>
-                {renderQuestion('มีการนอนเพิ่มหรือไม่?', 'extra_sleep', undefined, 'นอนเพิ่ม', ['นอนเพิ่ม', 'ไม่นอนเพิ่ม'])}
-                
-                {form.extra_sleep === 'นอนเพิ่ม' && (
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                        <p className="text-sm text-blue-800 mb-2 font-bold"><i className="fas fa-info-circle"></i> การนอนเพิ่มควรมากกว่า 4.5 ชั่วโมง</p>
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <Input type="time" label="เริ่มนอนเพิ่ม" value={form.extra_sleep_start || ''} onChange={e => handleSleepChange('extra_sleep', 'start', e.target.value)} />
-                            <Input type="time" label="ตื่นมาเพิ่ม" value={form.extra_sleep_end || ''} onChange={e => handleSleepChange('extra_sleep', 'end', e.target.value)} />
-                        </div>
-                        <div className={`p-3 rounded-lg text-center font-bold text-lg mb-4 border-2 ${
-                            (form.extra_sleep_hours || 0) < 4.5 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
-                        }`}>
-                            รวม {form.extra_sleep_hours?.toFixed(1) || 0} ชั่วโมง
-                        </div>
-                        {renderQuestion('คุณภาพการนอนเพิ่ม', 'extra_sleep_quality', 'extra_sleep_quality_detail', 'ไม่สนิท', ['หลับสนิท', 'ไม่สนิท'])}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-8">
+                <div>
+                    <h4 className="font-bold text-slate-700 mb-2">7. การนอนปกติ</h4>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <Input type="time" label="เริ่มนอน" value={form.sleep_start || ''} onChange={e => handleSleepChange('sleep', 'start', e.target.value)} />
+                        <Input type="time" label="ตื่น" value={form.sleep_end || ''} onChange={e => handleSleepChange('sleep', 'end', e.target.value)} />
                     </div>
-                )}
-            </>
+                    <div className={`p-3 rounded-lg text-center font-bold text-lg mb-4 border-2 ${
+                        (form.sleep_hours || 0) < 6 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
+                    }`}>
+                        รวม {form.sleep_hours?.toFixed(1) || 0} ชั่วโมง
+                    </div>
+                    {renderQuestion('คุณภาพการนอน', 'sleep_quality', 'sleep_quality_detail', 'ไม่สนิท', ['หลับสนิท', 'ไม่สนิท'])}
+                </div>
+                
+                <div>
+                    <hr className="md:hidden my-4"/>
+                    <h4 className="font-bold text-slate-700 mb-2">8. การนอนเพิ่ม</h4>
+                    {renderQuestion('มีการนอนเพิ่มหรือไม่?', 'extra_sleep', undefined, 'นอนเพิ่ม', ['นอนเพิ่ม', 'ไม่นอนเพิ่ม'])}
+                    
+                    {form.extra_sleep === 'นอนเพิ่ม' && (
+                        <div className="bg-blue-50 p-4 rounded-lg mt-2">
+                            <p className="text-sm text-blue-800 mb-2 font-bold"><i className="fas fa-info-circle"></i> การนอนเพิ่มควรมากกว่า 4.5 ชั่วโมง</p>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <Input type="time" label="เริ่มนอนเพิ่ม" value={form.extra_sleep_start || ''} onChange={e => handleSleepChange('extra_sleep', 'start', e.target.value)} />
+                                <Input type="time" label="ตื่นมาเพิ่ม" value={form.extra_sleep_end || ''} onChange={e => handleSleepChange('extra_sleep', 'end', e.target.value)} />
+                            </div>
+                            <div className={`p-3 rounded-lg text-center font-bold text-lg mb-4 border-2 ${
+                                (form.extra_sleep_hours || 0) < 4.5 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
+                            }`}>
+                                รวม {form.extra_sleep_hours?.toFixed(1) || 0} ชั่วโมง
+                            </div>
+                            {renderQuestion('คุณภาพการนอนเพิ่ม', 'extra_sleep_quality', 'extra_sleep_quality_detail', 'ไม่สนิท', ['หลับสนิท', 'ไม่สนิท'])}
+                        </div>
+                    )}
+                </div>
+            </div>
         ))}
 
         {renderSection('สภาพแวดล้อมและประสาทสัมผัส', 'fa-eye', (
-             <>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-8">
                 {renderQuestion('เรื่องกังวลใจ?', 'worry_detail', 'worry_text')}
                 {renderQuestion('สถานที่พักผ่อน?', 'rest_location', 'rest_location_detail', 'นอกบ้าน', ['บ้าน', 'นอกบ้าน'])}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        {renderQuestion('ปัญหาสายตา?', 'vision_problem', 'vision_detail')}
-                        {renderQuestion('สวมแว่นตา?', 'glasses', 'glasses_detail')}
-                    </div>
-                    <div>
-                        {renderQuestion('ปัญหาการได้ยิน?', 'hearing_problem', 'hearing_detail')}
-                        {renderQuestion('เครื่องช่วยฟัง?', 'hearing_aid', 'hearing_aid_detail')}
-                    </div>
-                </div>
-             </>
+                
+                {renderQuestion('ปัญหาสายตา?', 'vision_problem', 'vision_detail')}
+                {renderQuestion('สวมแว่นตา?', 'glasses', 'glasses_detail')}
+                
+                {renderQuestion('ปัญหาการได้ยิน?', 'hearing_problem', 'hearing_detail')}
+                {renderQuestion('เครื่องช่วยฟัง?', 'hearing_aid', 'hearing_aid_detail')}
+             </div>
         ))}
         
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t flex justify-center z-20">

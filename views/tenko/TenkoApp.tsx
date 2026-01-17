@@ -49,20 +49,43 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
       }
   };
 
-  const SidebarItem = ({ view, icon, label }: { view: View; icon: string; label: string }) => (
-    <div 
-      onClick={() => { setCurrentView(view); setSelectedRecordId(null); }}
-      className={`px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors ${currentView === view ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10 border-r-4 border-transparent'}`}
-    >
-      <i className={`fas ${icon} w-6 text-center`}></i>
-      <span className="font-medium">{label}</span>
-      {view.includes('queue') && (
-        <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            {records.filter(r => view === 'queue-checkin' ? r.checkin_status === 'pending' : r.checkout_status === 'pending').length}
-        </span>
-      )}
-    </div>
-  );
+  // Nav Item component reusable for both Sidebar (Desktop) and BottomNav (Mobile)
+  const NavItem = ({ view, icon, label, mobile = false }: { view: View; icon: string; label: string; mobile?: boolean }) => {
+      const isActive = currentView === view;
+      const count = records.filter(r => view === 'queue-checkin' ? r.checkin_status === 'pending' : r.checkout_status === 'pending').length;
+      
+      if (mobile) {
+          return (
+            <button 
+                onClick={() => { setCurrentView(view); setSelectedRecordId(null); }}
+                className={`flex flex-col items-center justify-center p-2 flex-1 relative ${isActive ? 'text-blue-200' : 'text-slate-400'}`}
+            >
+                <i className={`fas ${icon} text-lg mb-0.5`}></i>
+                <span className="text-[9px] leading-tight">{label.split(' ')[0]}</span>
+                {view.includes('queue') && count > 0 && (
+                    <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[9px] flex items-center justify-center rounded-full font-bold border border-blue-900">
+                        {count}
+                    </span>
+                )}
+            </button>
+          );
+      }
+
+      return (
+        <div 
+          onClick={() => { setCurrentView(view); setSelectedRecordId(null); }}
+          className={`px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors ${isActive ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10 border-r-4 border-transparent'}`}
+        >
+          <i className={`fas ${icon} w-6 text-center`}></i>
+          <span className="font-medium">{label}</span>
+          {view.includes('queue') && count > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {count}
+            </span>
+          )}
+        </div>
+      );
+  };
 
   const renderContent = () => {
     if (selectedRecordId) {
@@ -91,9 +114,9 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
   };
 
   return (
-    <div className="flex h-full bg-slate-50 overflow-hidden">
-      {/* Sidebar hidden when printing */}
-      <aside className="w-64 bg-gradient-to-b from-blue-900 to-blue-700 text-white flex flex-col shadow-xl z-20 print:hidden">
+    <div className="flex flex-col md:flex-row h-full bg-slate-50 overflow-hidden">
+      {/* Sidebar - Hidden on Mobile */}
+      <aside className="hidden md:flex w-64 bg-gradient-to-b from-blue-900 to-blue-700 text-white flex-col shadow-xl z-20 print:hidden h-full">
         <div className="p-6 border-b border-blue-500/30">
             <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -105,14 +128,14 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
                 </div>
             </div>
         </div>
-        <nav className="flex-1 py-4 space-y-1 text-sm">
-            <SidebarItem view="dashboard" icon="fa-home" label="หน้าหลัก" />
-            <SidebarItem view="queue-checkin" icon="fa-clipboard-check" label="คิว (ก่อนเริ่มงาน)" />
-            <SidebarItem view="queue-checkout" icon="fa-flag-checkered" label="คิว (หลังเลิกงาน)" />
-            <SidebarItem view="completed" icon="fa-check-double" label="รายการเสร็จสิ้น" />
-            <SidebarItem view="analytics" icon="fa-chart-line" label="แดชบอร์ด/ปฏิทิน" />
-            <SidebarItem view="report" icon="fa-print" label="พิมพ์รายงาน" />
-            <SidebarItem view="manage" icon="fa-users-cog" label="ข้อมูลพนักงาน" />
+        <nav className="flex-1 py-4 space-y-1 text-sm overflow-y-auto">
+            <NavItem view="dashboard" icon="fa-home" label="หน้าหลัก" />
+            <NavItem view="queue-checkin" icon="fa-clipboard-check" label="คิว (ก่อนเริ่มงาน)" />
+            <NavItem view="queue-checkout" icon="fa-flag-checkered" label="คิว (หลังเลิกงาน)" />
+            <NavItem view="completed" icon="fa-check-double" label="รายการเสร็จสิ้น" />
+            <NavItem view="analytics" icon="fa-chart-line" label="แดชบอร์ด/ปฏิทิน" />
+            <NavItem view="report" icon="fa-print" label="พิมพ์รายงาน" />
+            <NavItem view="manage" icon="fa-users-cog" label="ข้อมูลพนักงาน" />
         </nav>
         <div className="p-4 border-t border-blue-500/30">
             <button onClick={onLogout} className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
@@ -124,9 +147,33 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
         </div>
       </aside>
       
-      <main className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible pb-20 md:pb-8 w-full">
+        {/* Mobile Header */}
+        <div className="md:hidden flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-sm border border-slate-100">
+             <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
+                    <i className="fas fa-user-shield text-xs"></i>
+                </div>
+                <span className="font-bold text-sm text-slate-700">{user.name}</span>
+             </div>
+             <button onClick={onLogout} className="text-slate-400 hover:text-red-500">
+                 <i className="fas fa-sign-out-alt"></i>
+             </button>
+        </div>
         {renderContent()}
       </main>
+
+      {/* Bottom Navigation - Hidden on Desktop */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-slate-400 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-30 flex justify-around items-center border-t border-slate-800 safe-area-pb">
+            <NavItem view="dashboard" icon="fa-home" label="Home" mobile />
+            <NavItem view="queue-checkin" icon="fa-clipboard-check" label="In" mobile />
+            <NavItem view="queue-checkout" icon="fa-flag-checkered" label="Out" mobile />
+            <NavItem view="completed" icon="fa-check-double" label="Done" mobile />
+            <div className="w-[1px] h-6 bg-slate-700 mx-1"></div>
+            <NavItem view="analytics" icon="fa-chart-line" label="Stats" mobile />
+            <NavItem view="manage" icon="fa-cog" label="Admin" mobile />
+      </nav>
     </div>
   );
 };

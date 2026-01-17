@@ -138,7 +138,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
 
   return (
     <div className="h-full bg-slate-50 flex flex-col overflow-hidden">
-      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 md:p-6 shadow-lg shrink-0">
+      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 md:p-6 shadow-lg shrink-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
@@ -159,14 +159,14 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-4 md:p-6 w-full flex-1 flex flex-col gap-3 md:gap-6 min-h-0">
+      <main className="max-w-4xl mx-auto p-4 md:p-6 w-full flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
-            <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="h-full flex flex-col items-center justify-center">
                 <i className="fas fa-circle-notch fa-spin text-blue-500 text-3xl"></i>
                 <p className="mt-2 text-slate-500">กำลังโหลดข้อมูล...</p>
             </div>
         ) : (
-            <>
+            <div className="space-y-4 md:space-y-6">
                 {/* Status Messages */}
                 {todayRecord && todayRecord.checkin_status !== 'approved' && todayRecord.checkin_status !== null && (
                     <Card className="bg-amber-50 border-amber-200 py-3 px-4 shrink-0">
@@ -192,20 +192,20 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                     </Card>
                 )}
 
-                {/* Main Menu Grid - Responsive Layout */}
-                <div className="flex-1 grid grid-rows-3 md:grid-rows-1 md:grid-cols-3 gap-3 md:gap-6 min-h-0">
+                {/* Main Menu Grid - Responsive for Portrait/Landscape Mobile & Tablet */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 auto-rows-fr">
                     <Card 
                         onClick={() => {
                             if (checkinStatus.allowed) setView('checkin');
                             else alert(checkinStatus.message);
                         }} 
-                        className={`h-full flex flex-col items-center justify-center hover:border-blue-300 relative overflow-hidden group ${!checkinStatus.allowed ? 'opacity-60 grayscale' : ''}`}
+                        className={`flex flex-col items-center justify-center p-6 md:p-10 hover:border-blue-300 relative overflow-hidden group transition-all min-h-[160px] ${!checkinStatus.allowed ? 'opacity-60 grayscale' : ''}`}
                     >
                         <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-clipboard-check text-7xl md:text-9xl text-blue-500"></i>
+                            <i className="fas fa-clipboard-check text-8xl text-blue-500"></i>
                         </div>
                         <div className="relative z-10 text-center">
-                            <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-2 md:mb-4 mx-auto text-xl md:text-2xl">
+                            <div className="w-14 h-14 md:w-16 md:h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3 mx-auto text-2xl md:text-3xl shadow-sm">
                                 <i className="fas fa-clipboard-check"></i>
                             </div>
                             <h3 className="text-lg md:text-xl font-bold text-slate-800">เท็งโกะก่อนเริ่มงาน</h3>
@@ -221,13 +221,13 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                             else if (todayRecord.checkout_status) alert('ทำรายการเสร็จสิ้นแล้วสำหรับรอบนี้');
                             else alert('รอการอนุมัติเท็งโกะก่อนเริ่มงาน');
                         }}
-                        className={`h-full flex flex-col items-center justify-center hover:border-emerald-300 relative overflow-hidden group ${!todayRecord || todayRecord.checkin_status !== 'approved' || todayRecord.checkout_status ? 'opacity-60 grayscale' : ''}`}
+                        className={`flex flex-col items-center justify-center p-6 md:p-10 hover:border-emerald-300 relative overflow-hidden group transition-all min-h-[160px] ${!todayRecord || todayRecord.checkin_status !== 'approved' || todayRecord.checkout_status ? 'opacity-60 grayscale' : ''}`}
                     >
                         <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-flag-checkered text-7xl md:text-9xl text-emerald-500"></i>
+                            <i className="fas fa-flag-checkered text-8xl text-emerald-500"></i>
                         </div>
                         <div className="relative z-10 text-center">
-                            <div className="w-12 h-12 md:w-16 md:h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-2 md:mb-4 mx-auto text-xl md:text-2xl">
+                            <div className="w-14 h-14 md:w-16 md:h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 mx-auto text-2xl md:text-3xl shadow-sm">
                                 <i className="fas fa-flag-checkered"></i>
                             </div>
                             <h3 className="text-lg md:text-xl font-bold text-slate-800">เท็งโกะหลังเลิกงาน</h3>
@@ -237,13 +237,13 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
 
                     <Card 
                         onClick={() => setView('history')}
-                        className="h-full flex flex-col items-center justify-center hover:border-purple-300 relative overflow-hidden group"
+                        className="flex flex-col items-center justify-center p-6 md:p-10 hover:border-purple-300 relative overflow-hidden group transition-all min-h-[160px]"
                     >
                         <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-history text-7xl md:text-9xl text-purple-500"></i>
+                            <i className="fas fa-history text-8xl text-purple-500"></i>
                         </div>
                         <div className="relative z-10 text-center">
-                            <div className="w-12 h-12 md:w-16 md:h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-2 md:mb-4 mx-auto text-xl md:text-2xl">
+                            <div className="w-14 h-14 md:w-16 md:h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 mx-auto text-2xl md:text-3xl shadow-sm">
                                 <i className="fas fa-history"></i>
                             </div>
                             <h3 className="text-lg md:text-xl font-bold text-slate-800">ประวัติการทำงาน</h3>
@@ -251,11 +251,11 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                         </div>
                     </Card>
                 </div>
-            </>
+            </div>
         )}
       </main>
 
-      <footer className="p-2 md:p-4 text-center text-slate-400 text-[10px] md:text-xs font-mono shrink-0">
+      <footer className="p-3 text-center text-slate-400 text-[10px] md:text-xs font-mono shrink-0 bg-slate-50 border-t border-slate-200">
         {SYSTEM_VERSION}
       </footer>
     </div>

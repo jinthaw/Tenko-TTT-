@@ -92,8 +92,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   if (showConfig) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-              <Card className="w-full max-w-md">
+          <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 overflow-y-auto">
+              <Card className="w-full max-w-md my-8">
                   <h2 className="text-xl font-bold mb-4">ตั้งค่า Server (App Script)</h2>
                   <div className="space-y-4">
                       {DEFAULT_SCRIPT_URL ? (
@@ -146,17 +146,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md shadow-xl border-t-4 border-blue-600">
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-200">
-            <i className="fas fa-truck-fast text-white text-3xl"></i>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 overflow-y-auto">
+      <Card className="w-full max-w-md shadow-xl border-t-4 border-blue-600 my-auto">
+        <div className="text-center mb-6 md:mb-8">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-200">
+            <i className="fas fa-truck-fast text-white text-2xl md:text-3xl"></i>
           </div>
-          <h1 className="text-3xl font-bold text-slate-800 mb-1">Tenko TTT by ACT</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-1">Tenko TTT by ACT</h1>
           <p className="text-slate-500">ระบบตรวจสอบความพร้อม (Fast Sync)</p>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4 md:space-y-5">
           {/* Server Status Section - Simplified */}
           <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between">
                <div className="flex items-center gap-2 text-sm px-2">
@@ -177,7 +177,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                </button>
           </div>
 
-          <div className="border-t border-slate-200 my-4"></div>
+          <div className="border-t border-slate-200 my-2 md:my-4"></div>
 
           <Input 
             label="รหัสพนักงาน" 
