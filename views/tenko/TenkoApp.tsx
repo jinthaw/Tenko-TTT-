@@ -7,6 +7,7 @@ import { StaffManagement } from './StaffManagement';
 import { TenkoHistory } from './TenkoHistory';
 import { TenkoAnalytics } from './TenkoAnalytics';
 import { TenkoReportPrint } from './TenkoReportPrint';
+import { SYSTEM_VERSION } from '../../constants';
 
 interface Props {
   user: User;
@@ -110,6 +111,9 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
             <button onClick={onLogout} className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
                 <i className="fas fa-sign-out-alt"></i> ออกจากระบบ
             </button>
+            <div className="mt-4 text-center text-xs text-blue-300/60 font-mono">
+                {SYSTEM_VERSION}
+            </div>
         </div>
       </aside>
       

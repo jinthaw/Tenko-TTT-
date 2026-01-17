@@ -5,6 +5,7 @@ import { StorageService } from '../../services/storage';
 import { CheckinForm } from './CheckinForm';
 import { CheckoutForm } from './CheckoutForm';
 import { DriverHistory } from './DriverHistory';
+import { SYSTEM_VERSION } from '../../constants';
 
 interface DriverAppProps {
   user: User;
@@ -136,8 +137,8 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   if (view === 'history') return <DriverHistory user={user} records={records} onBack={() => setView('home')} fixStartTime={fixStartTime} />;
 
   return (
-    <div className="h-full bg-slate-50 overflow-y-auto">
-      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-6 shadow-lg">
+    <div className="h-full bg-slate-50 overflow-y-auto flex flex-col">
+      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-6 shadow-lg shrink-0">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -157,7 +158,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 space-y-6">
+      <main className="max-w-4xl mx-auto p-6 space-y-6 flex-1 w-full">
         {isLoading ? (
             <div className="text-center py-10"><i className="fas fa-circle-notch fa-spin text-blue-500 text-3xl"></i><p className="mt-2 text-slate-500">กำลังโหลดข้อมูล...</p></div>
         ) : (
@@ -247,6 +248,10 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
             </>
         )}
       </main>
+
+      <footer className="p-4 text-center text-slate-400 text-xs font-mono shrink-0">
+        {SYSTEM_VERSION}
+      </footer>
     </div>
   );
 };
