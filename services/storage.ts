@@ -1,12 +1,16 @@
 import { TenkoRecord, User } from '../types';
-import { DRIVERS, TENKO_USERS } from '../constants';
+import { DRIVERS, TENKO_USERS, DEFAULT_SCRIPT_URL } from '../constants';
 
 const OFFLINE_KEY = 'tenko_offline_records';
 const SCRIPT_URL_KEY = 'TENKO_SCRIPT_URL';
 
 let lastConnectionStatus: 'online' | 'offline' | 'error' = 'online';
 
-const getScriptUrl = () => localStorage.getItem(SCRIPT_URL_KEY) || '';
+const getScriptUrl = () => {
+    // Priority: 1. Code Config 2. LocalStorage
+    if (DEFAULT_SCRIPT_URL) return DEFAULT_SCRIPT_URL;
+    return localStorage.getItem(SCRIPT_URL_KEY) || '';
+};
 
 const getOfflineData = (): TenkoRecord[] => {
     try {
@@ -49,6 +53,10 @@ export const StorageService = {
   getAll: async (): Promise<TenkoRecord[]> => {
     let dbRecords: TenkoRecord[] = [];
     
+    // Always load offline data first for speed (if we wanted purely offline first),
+    // but for 'getAll' we usually want fresh data.
+    // However, to keep it fast, the UI uses what we return here.
+    
     if (getScriptUrl()) {
         try {
             dbRecords = await callScript('getAll');
@@ -61,7 +69,11 @@ export const StorageService = {
     // Merge offline
     const offlineRecords = getOfflineData();
     const recordMap = new Map<string, TenkoRecord>();
+    
+    // Server data is base
     dbRecords.forEach(r => recordMap.set(r.__backendId, r));
+    
+    // Local data overwrites server data (because it's newer/pending)
     offlineRecords.forEach(r => recordMap.set(r.__backendId, r));
 
     return Array.from(recordMap.values()).sort((a, b) => 
@@ -69,6 +81,7 @@ export const StorageService = {
     );
   },
 
+  // Optimistic Create
   create: async (record: Partial<TenkoRecord>): Promise<{ isOk: boolean, data?: TenkoRecord }> => {
     const id = crypto.randomUUID();
     const fullRecord = { 
@@ -78,33 +91,29 @@ export const StorageService = {
         date: record.date || ''
     } as TenkoRecord;
 
-    if (getScriptUrl()) {
-        try {
-            await callScript('create', { data: fullRecord });
-            return { isOk: true, data: fullRecord };
-        } catch (e) {
-            console.error("Create failed, saving offline", e);
-        }
-    }
-
-    // Offline Fallback
+    // 1. Save to Local Storage IMMEDIATELY
     const offline = getOfflineData();
     offline.push(fullRecord);
     saveOfflineData(offline);
+
+    // 2. Try to Sync in Background (Fire and Forget-ish)
+    if (getScriptUrl()) {
+        callScript('create', { data: fullRecord })
+            .then(() => {
+                console.log("Background sync created:", id);
+            })
+            .catch(e => {
+                console.warn("Background sync failed, data is safe in local:", e);
+            });
+    }
+
+    // 3. Return success immediately to UI
     return { isOk: true, data: fullRecord };
   },
 
+  // Optimistic Update
   update: async (record: TenkoRecord): Promise<{ isOk: boolean }> => {
-    if (getScriptUrl()) {
-        try {
-            await callScript('update', { data: record });
-            return { isOk: true };
-        } catch (e) {
-            console.error("Update failed, saving offline", e);
-        }
-    }
-
-    // Offline Update
+    // 1. Update Local Storage IMMEDIATELY
     const offline = getOfflineData();
     const index = offline.findIndex(r => r.__backendId === record.__backendId);
     if (index >= 0) {
@@ -113,20 +122,31 @@ export const StorageService = {
         offline.push(record);
     }
     saveOfflineData(offline);
+
+    // 2. Sync Background
+    if (getScriptUrl()) {
+        callScript('update', { data: record })
+            .then(() => console.log("Background sync updated:", record.__backendId))
+            .catch(e => console.warn("Background sync failed:", e));
+    }
+
+    // 3. Return success
     return { isOk: true };
   },
 
+  // Optimistic Delete
   delete: async (recordId: string): Promise<{ isOk: boolean }> => {
-    if (getScriptUrl()) {
-         try {
-            await callScript('delete', { id: recordId });
-         } catch(e) {
-             console.error("Delete failed", e);
-         }
-    }
-
+    // 1. Update Local Storage IMMEDIATELY
     const offline = getOfflineData().filter(r => r.__backendId !== recordId);
     saveOfflineData(offline);
+
+    // 2. Sync Background
+    if (getScriptUrl()) {
+         callScript('delete', { id: recordId })
+            .then(() => console.log("Background sync deleted:", recordId))
+            .catch(e => console.warn("Background sync delete failed:", e));
+    }
+
     return { isOk: true };
   },
 
@@ -136,26 +156,39 @@ export const StorageService = {
       const offlineRecords = getOfflineData();
       if (offlineRecords.length === 0) return 0;
 
+      // In the optimistic approach, 'offlineRecords' is actually the full state of local changes.
+      // But typically we only want to sync things that haven't been synced.
+      // Since our simple GAS implementation just uses upsert (update if exists, insert if not),
+      // sending everything in offlineRecords that *might* be unsynced is safe but heavy.
+      
+      // For this simplified version, we'll iterate and push.
+      // In a more complex app, we'd have a 'dirty' flag.
+      // Here we assume 'syncPendingData' is called on load to ensure consistency.
+
       console.log(`Syncing ${offlineRecords.length} records to Apps Script...`);
-      const remainingRecords: TenkoRecord[] = [];
       let syncedCount = 0;
 
+      // We only try to sync, we don't remove them from offline immediately 
+      // because offline is our "cache". We rely on 'getAll' to eventually give us the server truth,
+      // but for now, we just push.
+      
       for (const record of offlineRecords) {
           try {
              await callScript('update', { data: record });
              syncedCount++;
           } catch (e) {
               console.error("Sync failed for", record.__backendId, e);
-              remainingRecords.push(record);
           }
       }
       
-      saveOfflineData(remainingRecords);
       return syncedCount;
   },
   
   getPendingCount: (): number => {
-      return getOfflineData().length;
+      // With optimistic UI, everything is technically "pending" until we confirm,
+      // but we treat offline data as our "database" for the UI.
+      // We can check connection status instead.
+      return lastConnectionStatus === 'offline' ? 1 : 0; 
   },
 
   // --- Users Logic ---
@@ -169,7 +202,6 @@ export const StorageService = {
 
     try {
         const users = await callScript('getUsers');
-        // If users is empty from sheet, fallback to defaults
         return Array.isArray(users) && users.length > 0 ? users : defaults;
     } catch (e) {
         console.warn("Failed to get users from script", e);
@@ -195,7 +227,6 @@ export const StorageService = {
       }
   },
 
-  // NEW: Upload all default users to sheet
   initializeDefaultUsers: async () => {
       if (!getScriptUrl()) throw new Error("No Script URL");
       

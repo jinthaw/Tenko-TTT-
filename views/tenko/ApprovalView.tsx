@@ -22,7 +22,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     can_work: record.can_work || 'ได้',
     driving_violation: record.driving_violation || 'ไม่มี',
     
-    // Default approval timestamp to now if not set
     checkin_timestamp: record.checkin_timestamp || new Date().toISOString(),
     checkout_timestamp: record.checkout_timestamp || new Date().toISOString()
   });
@@ -31,12 +30,10 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
   const [lastCheckout, setLastCheckout] = useState<string>('-');
   const [submitting, setSubmitting] = useState(false);
 
-  // --- Logic for Fix Start Time & Last Checkout ---
   useEffect(() => {
     const loadHistory = async () => {
         const allRecords = await StorageService.getAll();
         
-        // 1. Last Checkout
         const previousRecords = allRecords
             .filter(r => r.driver_id === record.driver_id && r.checkout_timestamp && r.__backendId !== record.__backendId)
             .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
@@ -44,7 +41,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             setLastCheckout(new Date(previousRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
         }
 
-        // 2. Fix Start Time Logic
         const driverRecords = allRecords
           .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
           .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
@@ -54,8 +50,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             if (mondayRecords.length > 0) {
                 const firstMonday = new Date(mondayRecords[0].checkin_timestamp!);
                 const firstMondayTime = firstMonday.getHours() * 60 + firstMonday.getMinutes();
-                
-                // Compare current record with first Monday
                 const currentRecTime = new Date(form.checkin_timestamp!).getHours() * 60 + new Date(form.checkin_timestamp!).getMinutes();
                 const diff = Math.abs(currentRecTime - firstMondayTime);
                 setFixStartStatus(diff > 120 ? 'NG' : 'OK');
@@ -72,14 +66,12 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
 
   const updateForm = (k: keyof TenkoRecord, v: any) => setForm(p => ({ ...p, [k]: v }));
 
-  // --- Validation Helpers ---
   const isTempBad = (t?: number) => t && t > 37.5;
   const isBPHighBad = (bp?: number) => bp && (bp < 90 || bp > 160);
   const isBPLowBad = (bp?: number) => bp && (bp < 60 || bp > 100);
   const isAlcoholBad = (a?: number) => a !== undefined && a !== 0;
 
   const handleApprove = async () => {
-    // Basic validation for reasons
     if (isAlcoholBad(form.alcohol_checkin) && !form.alcohol_checkin_reason) return alert('กรุณาระบุเหตุผลค่าแอลกอฮอล์');
     if (form.can_work === 'ไม่ได้' && !form.cannot_work_reason) return alert('กรุณาระบุสาเหตุที่วิ่งงานไม่ได้');
 
@@ -107,20 +99,17 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
   };
   
   const handleDelete = async () => {
-      if(confirm('ยืนยันการลบข้อมูลนี้?')) {
+      if(confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?\n\nการลบจะทำให้ข้อมูลหายไป และพนักงานขับรถสามารถส่งรายการเข้ามาใหม่ได้')) {
           setSubmitting(true);
           await StorageService.delete(record.__backendId);
           onSuccess();
       }
   }
 
-  // Helper to format Date ISO string (UTC) to Local datetime-local input format (YYYY-MM-DDTHH:mm)
   const formatDateForInput = (isoString?: string) => {
       if (!isoString) return '';
       const date = new Date(isoString);
       if (isNaN(date.getTime())) return '';
-      
-      // We need to shift the time by the timezone offset so that toISOString() outputs the local time values
       const tzOffset = date.getTimezoneOffset() * 60000; 
       const localDate = new Date(date.getTime() - tzOffset);
       return localDate.toISOString().slice(0, 16);
@@ -128,16 +117,12 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
 
   const handleDateChange = (val: string, field: 'checkin_timestamp' | 'checkout_timestamp') => {
       if (!val) return;
-      // val is YYYY-MM-DDTHH:mm in Local time.
-      // new Date(val) creates a date object representing that local time.
-      // .toISOString() converts it back to UTC for storage.
       const date = new Date(val);
       if (!isNaN(date.getTime())) {
           updateForm(field, date.toISOString());
       }
   };
 
-  // --- Render Sections ---
   const renderDriverDataSection = () => (
     <Card className="h-fit">
         <h3 className="font-bold text-slate-800 mb-4 border-b pb-2 flex justify-between">
@@ -181,7 +166,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                 )}
             </div>
 
-            {/* Post-Work Driver Report Section */}
             {(type === 'checkout' || type === 'view') && (
                 <div className="p-3 bg-purple-50 rounded border border-purple-100 mt-2">
                     <h4 className="font-bold text-purple-800 mb-2 border-b border-purple-200 pb-1 flex items-center gap-2">
@@ -230,7 +214,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             <i className="fas fa-user-shield"></i> ส่วนบันทึกของ Tenko
         </h3>
         
-        {/* Pre-work Inputs - Grouped for Continuous Entry */}
         {(type === 'checkin' || type === 'view') && (
             <div className="space-y-4">
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -305,7 +288,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             </div>
         )}
 
-        {/* Post-work Inputs */}
         {(type === 'checkout' || type === 'view') && (
             <div className="space-y-4 mt-6 border-t pt-4">
                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
@@ -352,11 +334,11 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             <Button onClick={handleApprove} isLoading={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 py-3 text-lg">
                 <i className="fas fa-save"></i> บันทึกข้อมูล (Save)
             </Button>
-            {type === 'view' && (
-                <Button onClick={handleDelete} isLoading={submitting} variant="danger" className="w-full">
-                    <i className="fas fa-trash-alt"></i> ลบข้อมูล
-                </Button>
-            )}
+            
+            {/* Delete Button Available Everywhere */}
+            <Button onClick={handleDelete} isLoading={submitting} variant="danger" className="w-full bg-white text-red-600 border-2 border-red-200 hover:bg-red-50 hover:border-red-500">
+                <i className="fas fa-trash-alt"></i> ลบข้อมูล (เพื่อให้ส่งใหม่)
+            </Button>
         </div>
     </Card>
   );

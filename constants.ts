@@ -2,6 +2,12 @@ import { User } from './types';
 
 export const SYSTEM_VERSION = "tenko V.01 (160126) บริษัท ออโต้แครี่เออร์";
 
+// --- การตั้งค่า Server ---
+// คุณสามารถนำ Web App URL จาก Google Apps Script มาวางตรงนี้ได้เลย
+// เช่น "https://script.google.com/macros/s/......./exec"
+// ถ้าใส่แล้ว หน้า Login จะไม่ถามหา URL อีก
+export const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwu7JSVxZYZn4KRRaYZryJj8N4lLcZWak2cMU29IZz3N7U3YaQVgqxZC1RH0rtg15iC/exec"; 
+
 export const DRIVERS: { id: string; name: string }[] = [
   { id: "240", name: "นายนิรุท สาเกตุ" },
   { id: "244", name: "นายสายฝน พลหมั่น" },
