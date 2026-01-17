@@ -49,6 +49,10 @@ export const StorageService = {
   
   hasScriptUrl: () => !!getScriptUrl(),
 
+  clearLocalCache: () => {
+      localStorage.removeItem(OFFLINE_KEY);
+  },
+
   // --- Records Logic ---
   getAll: async (): Promise<TenkoRecord[]> => {
     let dbRecords: TenkoRecord[] = [];
@@ -74,25 +78,81 @@ export const StorageService = {
     dbRecords.forEach(r => recordMap.set(r.__backendId, r));
     
     // Local data overwrites server data (because it's newer/pending)
+    // Also helps merging duplicates if IDs match, but if IDs differ (from dup create), we filter below
     offlineRecords.forEach(r => recordMap.set(r.__backendId, r));
 
-    return Array.from(recordMap.values()).sort((a, b) => 
+    // Deduplicate logical duplicates (Same Driver + Same Date)
+    // If we have multiple records for the same driver on the same day, prefer the one that is 'approved' or the latest one
+    const uniqueMap = new Map<string, TenkoRecord>();
+    
+    Array.from(recordMap.values()).forEach(r => {
+        const key = `${r.driver_id}_${r.date}`;
+        if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, r);
+        } else {
+            // Conflict resolution: Keep the one that is further along (approved > pending) or newer
+            const existing = uniqueMap.get(key)!;
+            
+            let scoreExisting = 0;
+            if (existing.checkin_status === 'approved') scoreExisting += 2;
+            if (existing.checkout_status === 'approved') scoreExisting += 2;
+            
+            let scoreNew = 0;
+            if (r.checkin_status === 'approved') scoreNew += 2;
+            if (r.checkout_status === 'approved') scoreNew += 2;
+
+            if (scoreNew > scoreExisting) {
+                uniqueMap.set(key, r);
+            } else if (scoreNew === scoreExisting) {
+                // If status same, take latest timestamp
+                const timeExisting = new Date(existing.checkin_real_timestamp || existing.date).getTime();
+                const timeNew = new Date(r.checkin_real_timestamp || r.date).getTime();
+                if (timeNew > timeExisting) {
+                    uniqueMap.set(key, r);
+                }
+            }
+        }
+    });
+
+    return Array.from(uniqueMap.values()).sort((a, b) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   },
 
   // Optimistic Create
   create: async (record: Partial<TenkoRecord>): Promise<{ isOk: boolean, data?: TenkoRecord }> => {
+    const offline = getOfflineData();
+    const today = record.date || new Date().toISOString().split('T')[0];
+
+    // --- DUPLICATE PREVENTION ---
+    // Check if we already have a record for this driver today in offline storage
+    const existingIndex = offline.findIndex(r => r.driver_id === record.driver_id && r.date === today);
+    
+    if (existingIndex >= 0) {
+        console.warn("Duplicate prevented: Found existing local record for today");
+        // Update the existing one instead of creating new
+        const existing = offline[existingIndex];
+        const updated = { ...existing, ...record }; // Merge new data
+        offline[existingIndex] = updated;
+        saveOfflineData(offline);
+        
+        // Try sync update
+        if (getScriptUrl()) {
+             callScript('update', { data: updated }).catch(e => console.warn(e));
+        }
+
+        return { isOk: true, data: updated };
+    }
+
     const id = crypto.randomUUID();
     const fullRecord = { 
         ...record, 
         __backendId: id,
         driver_id: record.driver_id || '',
-        date: record.date || ''
+        date: today
     } as TenkoRecord;
 
     // 1. Save to Local Storage IMMEDIATELY
-    const offline = getOfflineData();
     offline.push(fullRecord);
     saveOfflineData(offline);
 
@@ -156,24 +216,12 @@ export const StorageService = {
       const offlineRecords = getOfflineData();
       if (offlineRecords.length === 0) return 0;
 
-      // In the optimistic approach, 'offlineRecords' is actually the full state of local changes.
-      // But typically we only want to sync things that haven't been synced.
-      // Since our simple GAS implementation just uses upsert (update if exists, insert if not),
-      // sending everything in offlineRecords that *might* be unsynced is safe but heavy.
-      
-      // For this simplified version, we'll iterate and push.
-      // In a more complex app, we'd have a 'dirty' flag.
-      // Here we assume 'syncPendingData' is called on load to ensure consistency.
-
       console.log(`Syncing ${offlineRecords.length} records to Apps Script...`);
       let syncedCount = 0;
-
-      // We only try to sync, we don't remove them from offline immediately 
-      // because offline is our "cache". We rely on 'getAll' to eventually give us the server truth,
-      // but for now, we just push.
       
       for (const record of offlineRecords) {
           try {
+             // Use update (upsert) to be safe against duplicates
              await callScript('update', { data: record });
              syncedCount++;
           } catch (e) {
