@@ -13,24 +13,33 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError('');
-    const users = StorageService.getUsers();
-    const user = users.find(u => u.id === username);
-
-    if (user) {
-      if (user.role === 'driver' && password === '123') {
-        onLogin(user);
-        return;
-      } 
-      if (user.role === 'tenko' && password === '123') {
-        onLogin(user);
-        return;
-      }
-    }
+    setLoading(true);
     
-    setError('รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง');
+    try {
+        const users = await StorageService.getUsers();
+        const user = users.find(u => u.id === username);
+
+        if (user) {
+          if (user.role === 'driver' && password === '123') {
+            onLogin(user);
+            return;
+          } 
+          if (user.role === 'tenko' && password === '123') {
+            onLogin(user);
+            return;
+          }
+        }
+        
+        setError('รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง');
+    } catch (e) {
+        setError('ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -38,10 +47,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <Card className="w-full max-w-md shadow-xl border-t-4 border-blue-600">
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-200">
-            <i className="fas fa-clipboard-check text-white text-3xl"></i>
+            <i className="fas fa-truck-fast text-white text-3xl"></i>
           </div>
-          <h1 className="text-3xl font-bold text-slate-800 mb-1">Tenko TTT</h1>
-          <p className="text-slate-500">ACT Transport System</p>
+          <h1 className="text-3xl font-bold text-slate-800 mb-1">Tenko TTT by ACT</h1>
+          <p className="text-slate-500">ระบบตรวจสอบความพร้อม</p>
         </div>
 
         <div className="space-y-5">
@@ -78,12 +87,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
           )}
 
-          <Button onClick={handleLogin} className="w-full py-3 text-lg shadow-lg">
+          <Button onClick={handleLogin} isLoading={loading} className="w-full py-3 text-lg shadow-lg">
             <i className="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
           </Button>
 
           <div className="text-center mt-6">
-             <p className="text-xs text-slate-400 font-mono">System v{SYSTEM_VERSION}</p>
+             <p className="text-xs text-slate-400 font-mono">{SYSTEM_VERSION} (Neon DB)</p>
           </div>
         </div>
       </Card>

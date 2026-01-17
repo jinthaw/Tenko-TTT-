@@ -1,5 +1,5 @@
 {
-  "name": "copy2-of-copy-of-tenko-ttt-system-testdemo-จะทดสอบรัน",
+  "name": "tenko-ttt",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,8 +10,9 @@
   },
   "dependencies": {
     "react": "^19.2.3",
+    "xlsx": "^0.18.5",
     "react-dom": "^19.2.3",
-    "xlsx": "^0.18.5"
+    "@neondatabase/serverless": "0.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

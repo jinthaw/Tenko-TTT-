@@ -14,12 +14,27 @@ interface DriverAppProps {
 export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   const [view, setView] = useState<'home' | 'checkin' | 'checkout' | 'history'>('home');
   const [records, setRecords] = useState<TenkoRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const fetchData = async () => {
+      try {
+          // Attempt sync first
+          await StorageService.syncPendingData();
+          
+          const data = await StorageService.getAll();
+          setRecords(data);
+          setPendingCount(StorageService.getPendingCount());
+      } catch(e) {
+          console.error(e);
+      } finally {
+          setIsLoading(false);
+      }
+  };
 
   useEffect(() => {
-    setRecords(StorageService.getAll());
-    const interval = setInterval(() => {
-        setRecords(StorageService.getAll());
-    }, 5000); // Simple polling for updates
+    fetchData();
+    const interval = setInterval(fetchData, 10000); // Polling every 10s
     return () => clearInterval(interval);
   }, []);
 
@@ -83,8 +98,11 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   const fixStartTime = checkFixStartTime();
 
   const handleDataUpdate = () => {
-      setRecords(StorageService.getAll());
-      setView('home');
+      setIsLoading(true);
+      fetchData().then(() => {
+          setView('home');
+          setIsLoading(false);
+      });
   };
 
   if (view === 'checkin') return <CheckinForm user={user} onBack={() => setView('home')} onSubmitSuccess={handleDataUpdate} />;
@@ -104,95 +122,108 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                 <Badge type={fixStartTime === 'OK' ? 'approved' : 'danger'}>Fix Start Time: {fixStartTime}</Badge>
             </div>
           </div>
-          <Button variant="secondary" onClick={onLogout} className="border-white text-white hover:bg-white/20 hover:text-white">
-            <i className="fas fa-sign-out-alt"></i> ออก
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+              <Button variant="secondary" onClick={onLogout} className="border-white text-white hover:bg-white/20 hover:text-white">
+                <i className="fas fa-sign-out-alt"></i> ออก
+              </Button>
+              {pendingCount > 0 && (
+                  <div className="flex items-center gap-2 bg-amber-400 text-black px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                      <i className="fas fa-wifi-slash"></i> Offline ({pendingCount})
+                  </div>
+              )}
+          </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto p-6 space-y-6">
-        {todayRecord && todayRecord.checkin_status !== 'approved' && todayRecord.checkin_status !== null && (
-            <Card className="bg-amber-50 border-amber-200">
-                <div className="flex items-center gap-4 text-amber-800">
-                    <i className="fas fa-clock text-2xl"></i>
-                    <div>
-                        <h3 className="font-bold">รอตรวจสอบเท็งโกะก่อนเริ่มงาน</h3>
-                        <p className="text-sm opacity-80">กรุณารอเจ้าหน้าที่ตรวจสอบข้อมูล</p>
-                    </div>
+        {isLoading ? (
+            <div className="text-center py-10"><i className="fas fa-circle-notch fa-spin text-blue-500 text-3xl"></i><p className="mt-2 text-slate-500">กำลังโหลดข้อมูล...</p></div>
+        ) : (
+            <>
+                {todayRecord && todayRecord.checkin_status !== 'approved' && todayRecord.checkin_status !== null && (
+                    <Card className="bg-amber-50 border-amber-200">
+                        <div className="flex items-center gap-4 text-amber-800">
+                            <i className="fas fa-clock text-2xl"></i>
+                            <div>
+                                <h3 className="font-bold">รอตรวจสอบเท็งโกะก่อนเริ่มงาน</h3>
+                                <p className="text-sm opacity-80">กรุณารอเจ้าหน้าที่ตรวจสอบข้อมูล</p>
+                            </div>
+                        </div>
+                    </Card>
+                )}
+
+                {todayRecord && todayRecord.checkin_status === 'approved' && todayRecord.checkout_status === null && (
+                    <Card className="bg-emerald-50 border-emerald-200">
+                        <div className="flex items-center gap-4 text-emerald-800">
+                            <i className="fas fa-check-circle text-2xl"></i>
+                            <div>
+                                <h3 className="font-bold">พร้อมปฏิบัติงาน</h3>
+                                <p className="text-sm opacity-80">อย่าลืมทำรายการหลังเลิกงานเมื่อเสร็จสิ้นภารกิจ</p>
+                            </div>
+                        </div>
+                    </Card>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card 
+                        onClick={() => {
+                            if (checkinStatus.allowed) setView('checkin');
+                            else alert(checkinStatus.message);
+                        }} 
+                        className={`hover:border-blue-300 relative overflow-hidden group ${!checkinStatus.allowed ? 'opacity-60 grayscale' : ''}`}
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-clipboard-check text-9xl text-blue-500"></i>
+                        </div>
+                        <div className="relative z-10">
+                            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                                <i className="fas fa-clipboard-check"></i>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">เท็งโกะก่อนเริ่มงาน</h3>
+                            <p className="text-slate-500 text-sm mt-1">ตรวจสอบสุขภาพก่อนขับขี่</p>
+                            {!checkinStatus.allowed && <p className="text-red-500 text-xs mt-2 font-bold">{checkinStatus.message}</p>}
+                        </div>
+                    </Card>
+
+                    <Card 
+                        onClick={() => {
+                            if (todayRecord && todayRecord.checkin_status === 'approved' && !todayRecord.checkout_status) setView('checkout');
+                            else if (!todayRecord) alert('กรุณาทำเท็งโกะก่อนเริ่มงานก่อน');
+                            else if (todayRecord.checkout_status) alert('ทำรายการเสร็จสิ้นแล้วสำหรับรอบนี้');
+                            else alert('รอการอนุมัติเท็งโกะก่อนเริ่มงาน');
+                        }}
+                        className={`hover:border-emerald-300 relative overflow-hidden group ${!todayRecord || todayRecord.checkin_status !== 'approved' || todayRecord.checkout_status ? 'opacity-60 grayscale' : ''}`}
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-flag-checkered text-9xl text-emerald-500"></i>
+                        </div>
+                        <div className="relative z-10">
+                            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                                <i className="fas fa-flag-checkered"></i>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">เท็งโกะหลังเลิกงาน</h3>
+                            <p className="text-slate-500 text-sm mt-1">รายงานผลหลังปฏิบัติงาน</p>
+                        </div>
+                    </Card>
+
+                    <Card 
+                        onClick={() => setView('history')}
+                        className="hover:border-purple-300 relative overflow-hidden group"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-history text-9xl text-purple-500"></i>
+                        </div>
+                        <div className="relative z-10">
+                            <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                                <i className="fas fa-history"></i>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">ประวัติการทำงาน</h3>
+                            <p className="text-slate-500 text-sm mt-1">ตรวจสอบสถิติย้อนหลัง</p>
+                        </div>
+                    </Card>
                 </div>
-            </Card>
+            </>
         )}
-
-        {todayRecord && todayRecord.checkin_status === 'approved' && todayRecord.checkout_status === null && (
-             <Card className="bg-emerald-50 border-emerald-200">
-                <div className="flex items-center gap-4 text-emerald-800">
-                    <i className="fas fa-check-circle text-2xl"></i>
-                    <div>
-                        <h3 className="font-bold">พร้อมปฏิบัติงาน</h3>
-                        <p className="text-sm opacity-80">อย่าลืมทำรายการหลังเลิกงานเมื่อเสร็จสิ้นภารกิจ</p>
-                    </div>
-                </div>
-            </Card>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card 
-                onClick={() => {
-                    if (checkinStatus.allowed) setView('checkin');
-                    else alert(checkinStatus.message);
-                }} 
-                className={`hover:border-blue-300 relative overflow-hidden group ${!checkinStatus.allowed ? 'opacity-60 grayscale' : ''}`}
-            >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i className="fas fa-clipboard-check text-9xl text-blue-500"></i>
-                </div>
-                <div className="relative z-10">
-                    <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 text-2xl">
-                        <i className="fas fa-clipboard-check"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800">เท็งโกะก่อนเริ่มงาน</h3>
-                    <p className="text-slate-500 text-sm mt-1">ตรวจสอบสุขภาพก่อนขับขี่</p>
-                    {!checkinStatus.allowed && <p className="text-red-500 text-xs mt-2 font-bold">{checkinStatus.message}</p>}
-                </div>
-            </Card>
-
-            <Card 
-                onClick={() => {
-                    if (todayRecord && todayRecord.checkin_status === 'approved' && !todayRecord.checkout_status) setView('checkout');
-                    else if (!todayRecord) alert('กรุณาทำเท็งโกะก่อนเริ่มงานก่อน');
-                    else if (todayRecord.checkout_status) alert('ทำรายการเสร็จสิ้นแล้วสำหรับรอบนี้');
-                    else alert('รอการอนุมัติเท็งโกะก่อนเริ่มงาน');
-                }}
-                className={`hover:border-emerald-300 relative overflow-hidden group ${!todayRecord || todayRecord.checkin_status !== 'approved' || todayRecord.checkout_status ? 'opacity-60 grayscale' : ''}`}
-            >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i className="fas fa-flag-checkered text-9xl text-emerald-500"></i>
-                </div>
-                <div className="relative z-10">
-                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4 text-2xl">
-                        <i className="fas fa-flag-checkered"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800">เท็งโกะหลังเลิกงาน</h3>
-                    <p className="text-slate-500 text-sm mt-1">รายงานผลหลังปฏิบัติงาน</p>
-                </div>
-            </Card>
-
-            <Card 
-                onClick={() => setView('history')}
-                className="hover:border-purple-300 relative overflow-hidden group"
-            >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i className="fas fa-history text-9xl text-purple-500"></i>
-                </div>
-                <div className="relative z-10">
-                    <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-4 text-2xl">
-                        <i className="fas fa-history"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800">ประวัติการทำงาน</h3>
-                    <p className="text-slate-500 text-sm mt-1">ตรวจสอบสถิติย้อนหลัง</p>
-                </div>
-            </Card>
-        </div>
       </main>
     </div>
   );

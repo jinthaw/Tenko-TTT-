@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TenkoRecord, User } from '../../types';
 import { StorageService } from '../../services/storage';
 import { Button, Card } from '../../components/UI';
@@ -10,8 +10,13 @@ interface Props {
 export const TenkoReportPrint: React.FC<Props> = ({ records }) => {
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [drivers, setDrivers] = useState<User[]>([]);
 
-  const drivers = useMemo(() => StorageService.getUsers().filter(u => u.role === 'driver'), []);
+  useEffect(() => {
+    StorageService.getUsers().then(users => {
+        setDrivers(users.filter(u => u.role === 'driver'));
+    });
+  }, []);
   
   // Get available dates for the selected driver
   const availableDates = useMemo(() => {

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { TenkoRecord } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { TenkoRecord, User } from '../../types';
 import { Card, Button, Badge } from '../../components/UI';
 import { StorageService } from '../../services/storage';
 import * as XLSX from 'xlsx';
@@ -12,8 +12,13 @@ export const TenkoAnalytics: React.FC<Props> = ({ records }) => {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today);
   const [selectedDriverId, setSelectedDriverId] = useState<string>(''); // Filter state
+  const [drivers, setDrivers] = useState<User[]>([]);
 
-  const drivers = StorageService.getUsers().filter(u => u.role === 'driver');
+  useEffect(() => {
+    StorageService.getUsers().then(users => {
+        setDrivers(users.filter(u => u.role === 'driver'));
+    });
+  }, []);
 
   // --- Filtering Logic ---
   const filteredRecords = useMemo(() => {

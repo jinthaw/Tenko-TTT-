@@ -20,16 +20,25 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
   const [records, setRecords] = useState<TenkoRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
+  const loadData = async () => {
+      try {
+          const data = await StorageService.getAll();
+          setRecords(data);
+      } catch (e) {
+          console.error(e);
+      }
+  };
+
   useEffect(() => {
-    const load = () => setRecords(StorageService.getAll());
-    load();
-    const interval = setInterval(load, 5000);
+    loadData();
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, []);
 
   const handleUpdate = () => {
-    setRecords(StorageService.getAll());
-    setSelectedRecordId(null);
+    loadData().then(() => {
+        setSelectedRecordId(null);
+    });
   };
 
   const SidebarItem = ({ view, icon, label }: { view: View; icon: string; label: string }) => (

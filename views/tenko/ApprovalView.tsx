@@ -29,40 +29,44 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
 
   const [fixStartStatus, setFixStartStatus] = useState<string>('N/A');
   const [lastCheckout, setLastCheckout] = useState<string>('-');
+  const [submitting, setSubmitting] = useState(false);
 
   // --- Logic for Fix Start Time & Last Checkout ---
   useEffect(() => {
-    const allRecords = StorageService.getAll();
-    
-    // 1. Last Checkout
-    const previousRecords = allRecords
-        .filter(r => r.driver_id === record.driver_id && r.checkout_timestamp && r.__backendId !== record.__backendId)
-        .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
-    if (previousRecords.length > 0) {
-        setLastCheckout(new Date(previousRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
-    }
-
-    // 2. Fix Start Time Logic
-    const driverRecords = allRecords
-      .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
-      .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
-    
-    if (driverRecords.length > 0) {
-        const mondayRecords = driverRecords.filter(r => new Date(r.checkin_timestamp!).getDay() === 1);
-        if (mondayRecords.length > 0) {
-            const firstMonday = new Date(mondayRecords[0].checkin_timestamp!);
-            const firstMondayTime = firstMonday.getHours() * 60 + firstMonday.getMinutes();
-            
-            // Compare current record with first Monday
-            const currentRecTime = new Date(form.checkin_timestamp!).getHours() * 60 + new Date(form.checkin_timestamp!).getMinutes();
-            const diff = Math.abs(currentRecTime - firstMondayTime);
-            setFixStartStatus(diff > 120 ? 'NG' : 'OK');
-        } else {
-             setFixStartStatus('OK (No Monday Record)');
+    const loadHistory = async () => {
+        const allRecords = await StorageService.getAll();
+        
+        // 1. Last Checkout
+        const previousRecords = allRecords
+            .filter(r => r.driver_id === record.driver_id && r.checkout_timestamp && r.__backendId !== record.__backendId)
+            .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
+        if (previousRecords.length > 0) {
+            setLastCheckout(new Date(previousRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
         }
-    } else {
-        setFixStartStatus('OK (First Record)');
-    }
+
+        // 2. Fix Start Time Logic
+        const driverRecords = allRecords
+          .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
+          .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
+        
+        if (driverRecords.length > 0) {
+            const mondayRecords = driverRecords.filter(r => new Date(r.checkin_timestamp!).getDay() === 1);
+            if (mondayRecords.length > 0) {
+                const firstMonday = new Date(mondayRecords[0].checkin_timestamp!);
+                const firstMondayTime = firstMonday.getHours() * 60 + firstMonday.getMinutes();
+                
+                // Compare current record with first Monday
+                const currentRecTime = new Date(form.checkin_timestamp!).getHours() * 60 + new Date(form.checkin_timestamp!).getMinutes();
+                const diff = Math.abs(currentRecTime - firstMondayTime);
+                setFixStartStatus(diff > 120 ? 'NG' : 'OK');
+            } else {
+                setFixStartStatus('OK (No Monday Record)');
+            }
+        } else {
+            setFixStartStatus('OK (First Record)');
+        }
+    };
+    loadHistory();
   }, [record.driver_id, form.checkin_timestamp]);
 
 
@@ -74,11 +78,12 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
   const isBPLowBad = (bp?: number) => bp && (bp < 60 || bp > 100);
   const isAlcoholBad = (a?: number) => a !== undefined && a !== 0;
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     // Basic validation for reasons
     if (isAlcoholBad(form.alcohol_checkin) && !form.alcohol_checkin_reason) return alert('กรุณาระบุเหตุผลค่าแอลกอฮอล์');
     if (form.can_work === 'ไม่ได้' && !form.cannot_work_reason) return alert('กรุณาระบุสาเหตุที่วิ่งงานไม่ได้');
 
+    setSubmitting(true);
     const updateData: Partial<TenkoRecord> = { ...form };
 
     if (type === 'checkin') {
@@ -91,13 +96,20 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
       updateData.checkout_tenko_name = user.name;
     }
 
-    StorageService.update({ ...record, ...updateData });
-    onSuccess();
+    try {
+        await StorageService.update({ ...record, ...updateData });
+        onSuccess();
+    } catch(e) {
+        alert('เกิดข้อผิดพลาด');
+    } finally {
+        setSubmitting(false);
+    }
   };
   
-  const handleDelete = () => {
+  const handleDelete = async () => {
       if(confirm('ยืนยันการลบข้อมูลนี้?')) {
-          StorageService.delete(record.__backendId);
+          setSubmitting(true);
+          await StorageService.delete(record.__backendId);
           onSuccess();
       }
   }
@@ -337,11 +349,11 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
-            <Button onClick={handleApprove} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 py-3 text-lg">
+            <Button onClick={handleApprove} isLoading={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 py-3 text-lg">
                 <i className="fas fa-save"></i> บันทึกข้อมูล (Save)
             </Button>
             {type === 'view' && (
-                <Button onClick={handleDelete} variant="danger" className="w-full">
+                <Button onClick={handleDelete} isLoading={submitting} variant="danger" className="w-full">
                     <i className="fas fa-trash-alt"></i> ลบข้อมูล
                 </Button>
             )}

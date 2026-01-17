@@ -7,23 +7,31 @@ export const StaffManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User>>({ role: 'driver' });
+  const [loading, setLoading] = useState(false);
+
+  const loadUsers = async () => {
+      const data = await StorageService.getUsers();
+      setUsers(data);
+  };
 
   useEffect(() => {
-    setUsers(StorageService.getUsers());
+    loadUsers();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingUser.id || !editingUser.name) return alert('กรุณากรอกข้อมูลให้ครบ');
-    StorageService.saveUser(editingUser as User);
-    setUsers(StorageService.getUsers());
+    setLoading(true);
+    await StorageService.saveUser(editingUser as User);
+    await loadUsers();
+    setLoading(false);
     setIsModalOpen(false);
     setEditingUser({ role: 'driver' });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('ต้องการลบผู้ใช้นี้?')) {
-        StorageService.deleteUser(id);
-        setUsers(StorageService.getUsers());
+        await StorageService.deleteUser(id);
+        loadUsers();
     }
   };
 
@@ -67,7 +75,7 @@ export const StaffManagement: React.FC = () => {
 
   return (
     <div className="space-y-6 h-full flex flex-col">
-        <h2 className="text-2xl font-bold text-slate-800">จัดการข้อมูลพนักงาน</h2>
+        <h2 className="text-2xl font-bold text-slate-800">จัดการข้อมูลพนักงาน (Neon DB)</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 grow overflow-hidden pb-6">
             {renderList('driver', 'พนักงานขับรถ', 'fa-truck', 'blue')}
             {renderList('tenko', 'เจ้าหน้าที่ Tenko', 'fa-user-shield', 'emerald')}
@@ -85,7 +93,7 @@ export const StaffManagement: React.FC = () => {
                         <Input label="รหัสพนักงาน (ID)" value={editingUser.id || ''} onChange={e => setEditingUser(p => ({...p, id: e.target.value}))} />
                         <Input label="ชื่อ-นามสกุล" value={editingUser.name || ''} onChange={e => setEditingUser(p => ({...p, name: e.target.value}))} />
                         <div className="flex gap-2 mt-6">
-                            <Button onClick={handleSave} className="w-full">บันทึก</Button>
+                            <Button onClick={handleSave} isLoading={loading} className="w-full">บันทึก</Button>
                             <Button variant="secondary" onClick={() => setIsModalOpen(false)} className="w-full">ยกเลิก</Button>
                         </div>
                     </div>

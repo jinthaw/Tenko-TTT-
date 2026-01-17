@@ -1,148 +1,223 @@
+import { Pool } from '@neondatabase/serverless';
 import { TenkoRecord, User } from '../types';
 import { DRIVERS, TENKO_USERS } from '../constants';
 
-const DATA_KEY = 'tenko_ttt_data';
-const USERS_KEY = 'tenko_ttt_users';
+// *** เปลี่ยนมาใช้ Environment Variable เพื่อความปลอดภัยและการ Deploy บน Vercel ***
+// ใน Vercel Settings > Environment Variables ให้ตั้งชื่อว่า: VITE_DATABASE_URL
+const CONNECTION_STRING = (import.meta as any).env?.VITE_DATABASE_URL || "";
+
+// Create a connection pool only if connection string is present
+const pool = new Pool({ connectionString: CONNECTION_STRING });
+const OFFLINE_KEY = 'tenko_offline_records';
+
+const getOfflineData = (): TenkoRecord[] => {
+    try {
+        return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
+    } catch {
+        return [];
+    }
+};
+
+const saveOfflineData = (records: TenkoRecord[]) => {
+    localStorage.setItem(OFFLINE_KEY, JSON.stringify(records));
+};
 
 export const StorageService = {
-  // --- Records ---
-  getAll: (): TenkoRecord[] => {
-    try {
-      const data = localStorage.getItem(DATA_KEY);
-      if (!data) {
-        // --- Generate Sample Data for Driver 240 as requested ---
-        const today = new Date();
-        const y = today.getFullYear();
-        const m = String(today.getMonth() + 1).padStart(2, '0');
-        const days = ['01', '03', '05', '06', '07', '08', '12'];
-        
-        const samples: TenkoRecord[] = days.map((day, index) => {
-            // Varying BP values for graph visualization
-            const bpH = 120 + Math.floor(Math.random() * 20) - 10; // 110-130
-            const bpL = 80 + Math.floor(Math.random() * 10) - 5;   // 75-85
-            const dateStr = `${y}-${m}-${day}`;
+  // --- Sync Mechanism ---
+  syncPendingData: async (): Promise<number> => {
+      // ถ้าไม่มี Connection String ให้ข้ามการ Sync ไปเลย (ทำงาน Offline 100%)
+      if (!CONNECTION_STRING) return 0;
 
-            return {
-                __backendId: `sample-${day}`,
-                driver_id: '240',
-                driver_name: 'นายนิรุท สาเกตุ',
-                date: dateStr,
-                tired: 'ไม่มี',
-                sick: 'ไม่มี',
-                drowsy: 'ไม่มี',
-                injury: 'ไม่มี',
-                medication: 'ไม่ทาน',
-                body_condition: 'ปกติ',
-                sleep_start: '22:00',
-                sleep_end: '06:00',
-                sleep_hours: 8,
-                sleep_quality: 'หลับสนิท',
-                extra_sleep: 'ไม่นอนเพิ่ม',
-                checkin_status: 'approved',
-                checkin_timestamp: `${dateStr}T07:30:00.000Z`,
-                checkin_tenko_name: 'นายชัยสิทธิ์ ธัญญพืช',
-                checkin_tenko_id: '009',
-                temperature: 36.5,
-                alcohol_checkin: 0,
-                blood_pressure_high: bpH,
-                blood_pressure_low: bpL,
-                phone_usage_compliant: 'ตรงตามที่แจ้ง',
-                can_work: 'ได้',
-                
-                checkout_status: 'approved',
-                checkout_timestamp: `${dateStr}T17:30:00.000Z`,
-                checkout_tenko_name: 'นายชัยสิทธิ์ ธัญญพืช',
-                alcohol_checkout: 0,
-                vehicle_handover: 'ปกติ',
-                body_condition_checkout: 'ปกติ',
-                route_risk: 'ปกติ'
-            } as TenkoRecord;
-        });
-        
-        localStorage.setItem(DATA_KEY, JSON.stringify(samples));
-        return samples;
+      const offlineRecords = getOfflineData();
+      if (offlineRecords.length === 0) return 0;
+
+      console.log(`Syncing ${offlineRecords.length} records...`);
+      const remainingRecords: TenkoRecord[] = [];
+      let syncedCount = 0;
+
+      for (const record of offlineRecords) {
+          try {
+              // Try to Upsert
+              const check = await pool.query('SELECT id FROM records WHERE id = $1', [record.__backendId]);
+              
+              if (check.rows.length > 0) {
+                  // Update
+                  await pool.query(
+                    'UPDATE records SET data = $1, checkin_status = $2, checkout_status = $3 WHERE id = $4',
+                    [record, record.checkin_status, record.checkout_status, record.__backendId]
+                  );
+              } else {
+                  // Insert
+                  await pool.query(
+                    'INSERT INTO records (id, driver_id, date, data) VALUES ($1, $2, $3, $4)',
+                    [record.__backendId, record.driver_id, record.date, record]
+                  );
+              }
+              syncedCount++;
+          } catch (e) {
+              console.error("Sync failed for record", record.__backendId, e);
+              remainingRecords.push(record);
+          }
       }
-      return JSON.parse(data);
-    } catch (e) {
-      console.error("Failed to load data", e);
-      return [];
-    }
+
+      saveOfflineData(remainingRecords);
+      return syncedCount;
   },
 
-  save: (records: TenkoRecord[]) => {
-    try {
-      localStorage.setItem(DATA_KEY, JSON.stringify(records));
-    } catch (e) {
-      console.error("Failed to save data", e);
-    }
+  getPendingCount: (): number => {
+      return getOfflineData().length;
   },
 
-  create: (record: Partial<TenkoRecord>): { isOk: boolean, data?: TenkoRecord } => {
-    const records = StorageService.getAll();
-    const newRecord: TenkoRecord = {
-      ...record,
-      __backendId: Date.now().toString() + Math.random().toString(36).substring(2),
-    } as TenkoRecord;
+  // --- Records ---
+  getAll: async (): Promise<TenkoRecord[]> => {
+    let dbRecords: TenkoRecord[] = [];
     
-    records.push(newRecord);
-    StorageService.save(records);
-    return { isOk: true, data: newRecord };
+    // พยายามโหลดจาก DB เฉพาะเมื่อมี Connection String
+    if (CONNECTION_STRING) {
+        try {
+          const result = await pool.query('SELECT * FROM records ORDER BY date DESC');
+          dbRecords = result.rows.map(row => ({
+              ...row.data,
+              __backendId: row.id,
+              driver_id: row.driver_id,
+              date: row.date,
+              // Map status fields explicitly if needed for query filtering later, 
+              // though they are inside 'data' jsonb too based on previous logic.
+              checkin_status: row.checkin_status || row.data.checkin_status,
+              checkout_status: row.checkout_status || row.data.checkout_status
+            } as TenkoRecord));
+        } catch (e) {
+          console.error("Failed to load data from Neon (Offline mode active)", e);
+        }
+    }
+
+    // Merge with offline records
+    const offlineRecords = getOfflineData();
+    const recordMap = new Map<string, TenkoRecord>();
+    
+    dbRecords.forEach(r => recordMap.set(r.__backendId, r));
+    offlineRecords.forEach(r => recordMap.set(r.__backendId, r));
+
+    return Array.from(recordMap.values()).sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
   },
 
-  update: (record: TenkoRecord): { isOk: boolean } => {
-    const records = StorageService.getAll();
-    const index = records.findIndex(r => r.__backendId === record.__backendId);
-    if (index !== -1) {
-      records[index] = record;
-      StorageService.save(records);
-      return { isOk: true };
+  create: async (record: Partial<TenkoRecord>): Promise<{ isOk: boolean, data?: TenkoRecord }> => {
+    const id = crypto.randomUUID();
+    const fullRecord = { 
+        ...record, 
+        __backendId: id,
+        driver_id: record.driver_id || '',
+        date: record.date || ''
+    } as TenkoRecord;
+
+    if (CONNECTION_STRING) {
+        try {
+          await pool.query(
+            'INSERT INTO records (id, driver_id, date, data, checkin_status, checkout_status) VALUES ($1, $2, $3, $4, $5, $6)',
+            [id, fullRecord.driver_id, fullRecord.date, fullRecord, fullRecord.checkin_status, fullRecord.checkout_status]
+          );
+          return { isOk: true, data: fullRecord };
+        } catch (e) {
+          console.warn("Neon connection failed. Saving locally.", e);
+        }
     }
-    return { isOk: false };
+
+    // Fallback: Save to LocalStorage
+    const offline = getOfflineData();
+    offline.push(fullRecord);
+    saveOfflineData(offline);
+    return { isOk: true, data: fullRecord };
   },
 
-  delete: (recordId: string): { isOk: boolean } => {
-    let records = StorageService.getAll();
-    const initialLength = records.length;
-    records = records.filter(r => r.__backendId !== recordId);
-    if (records.length !== initialLength) {
-      StorageService.save(records);
-      return { isOk: true };
+  update: async (record: TenkoRecord): Promise<{ isOk: boolean }> => {
+    if (CONNECTION_STRING) {
+        try {
+          await pool.query(
+            'UPDATE records SET data = $1, checkin_status = $2, checkout_status = $3 WHERE id = $4',
+            [record, record.checkin_status, record.checkout_status, record.__backendId]
+          );
+          return { isOk: true };
+        } catch (e) {
+          console.warn("Neon connection failed. Updating locally.", e);
+        }
     }
-    return { isOk: false };
+
+    // Fallback: Update in LocalStorage
+    const offline = getOfflineData();
+    const index = offline.findIndex(r => r.__backendId === record.__backendId);
+    
+    if (index >= 0) {
+        offline[index] = record;
+    } else {
+        offline.push(record);
+    }
+    saveOfflineData(offline);
+    return { isOk: true };
+  },
+
+  delete: async (recordId: string): Promise<{ isOk: boolean }> => {
+    if (CONNECTION_STRING) {
+        try {
+          await pool.query('DELETE FROM records WHERE id = $1', [recordId]);
+          
+          const offline = getOfflineData().filter(r => r.__backendId !== recordId);
+          saveOfflineData(offline);
+          
+          return { isOk: true };
+        } catch (e) {
+          console.warn("Neon delete failed. Attempting local delete only.", e);
+        }
+    }
+
+    const offline = getOfflineData().filter(r => r.__backendId !== recordId);
+    saveOfflineData(offline);
+    return { isOk: true };
   },
 
   // --- Users ---
-  getUsers: (): User[] => {
-    try {
-      const data = localStorage.getItem(USERS_KEY);
-      if (!data) {
-        // Initialize with constants if empty
-        const initialUsers: User[] = [
+  getUsers: async (): Promise<User[]> => {
+    const defaults = [
           ...DRIVERS.map(d => ({ ...d, role: 'driver' as const })),
           ...TENKO_USERS.map(u => ({ ...u, role: 'tenko' as const }))
-        ];
-        localStorage.setItem(USERS_KEY, JSON.stringify(initialUsers));
-        return initialUsers;
-      }
-      return JSON.parse(data);
+    ];
+
+    if (!CONNECTION_STRING) return defaults;
+
+    try {
+      const result = await pool.query('SELECT * FROM users');
+      if (result.rows.length === 0) return defaults;
+      return result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        role: row.role as 'driver' | 'tenko'
+      }));
     } catch (e) {
-      return [];
+      // Offline fallback
+      return defaults;
     }
   },
 
-  saveUser: (user: User) => {
-    const users = StorageService.getUsers();
-    const index = users.findIndex(u => u.id === user.id);
-    if (index >= 0) {
-      users[index] = user;
-    } else {
-      users.push(user);
+  saveUser: async (user: User) => {
+    if (!CONNECTION_STRING) return;
+    try {
+      await pool.query(
+        `INSERT INTO users (id, name, role, data) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (id) DO UPDATE SET name = $2, role = $3`,
+        [user.id, user.name, user.role, user]
+      );
+    } catch (e) {
+      console.error("Failed to save user (Offline)", e);
     }
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
   },
 
-  deleteUser: (userId: string) => {
-    const users = StorageService.getUsers().filter(u => u.id !== userId);
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  deleteUser: async (userId: string) => {
+    if (!CONNECTION_STRING) return;
+    try {
+      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    } catch (e) {
+      console.error("Failed to delete user", e);
+    }
   }
 };

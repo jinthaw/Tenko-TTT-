@@ -18,23 +18,25 @@ export const CheckoutForm: React.FC<Props> = ({ record, onBack, onSubmitSuccess 
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.vehicle_handover || !form.body_condition_checkout || !form.route_risk) {
       alert('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      StorageService.update({
-        ...record,
-        ...form,
-        checkout_timestamp: new Date().toISOString(),
-        checkout_status: 'pending'
-      });
-      setSubmitting(false);
-      onSubmitSuccess();
-    }, 800);
+    try {
+        await StorageService.update({
+            ...record,
+            ...form,
+            checkout_timestamp: new Date().toISOString(),
+            checkout_status: 'pending'
+        });
+        onSubmitSuccess();
+    } catch (e) {
+        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+        setSubmitting(false);
+    }
   };
 
   return (

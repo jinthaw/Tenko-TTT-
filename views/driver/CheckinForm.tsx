@@ -30,15 +30,18 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
   const [lastCheckout, setLastCheckout] = useState<string | null>(null);
 
   useEffect(() => {
-    // Find last checkout time
-    const records = StorageService.getAll();
-    const myRecords = records
-        .filter(r => r.driver_id === user.id && r.checkout_timestamp)
-        .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
-    
-    if (myRecords.length > 0) {
-        setLastCheckout(new Date(myRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
-    }
+    // Find last checkout time (Async)
+    const loadLastCheckout = async () => {
+        const records = await StorageService.getAll();
+        const myRecords = records
+            .filter(r => r.driver_id === user.id && r.checkout_timestamp)
+            .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
+        
+        if (myRecords.length > 0) {
+            setLastCheckout(new Date(myRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
+        }
+    };
+    loadLastCheckout();
   }, [user.id]);
 
   const updateForm = (key: keyof TenkoRecord, value: any) => {
@@ -67,26 +70,28 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.sleep_hours) {
       alert('กรุณากรอกเวลาการนอนหลับ');
       return;
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      StorageService.create({
-        driver_id: user.id,
-        driver_name: user.name,
-        date: new Date().toISOString().split('T')[0],
-        checkin_real_timestamp: new Date().toISOString(),
-        checkin_status: 'pending',
-        checkout_status: null,
-        ...form
-      });
-      setSubmitting(false);
-      onSubmitSuccess();
-    }, 800);
+    try {
+        await StorageService.create({
+            driver_id: user.id,
+            driver_name: user.name,
+            date: new Date().toISOString().split('T')[0],
+            checkin_real_timestamp: new Date().toISOString(),
+            checkin_status: 'pending',
+            checkout_status: null,
+            ...form
+        });
+        onSubmitSuccess();
+    } catch (e) {
+        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+        setSubmitting(false);
+    }
   };
 
   const renderSection = (title: string, icon: string, children: React.ReactNode) => (
