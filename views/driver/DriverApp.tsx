@@ -137,20 +137,21 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   if (view === 'history') return <DriverHistory user={user} records={records} onBack={() => setView('home')} fixStartTime={fixStartTime} />;
 
   return (
-    <div className="h-full bg-slate-50 overflow-y-auto flex flex-col">
-      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-6 shadow-lg shrink-0">
+    <div className="h-full bg-slate-50 flex flex-col overflow-hidden">
+      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 md:p-6 shadow-lg shrink-0">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
               <i className="fas fa-user-circle"></i> {user.name}
             </h1>
-            <p className="opacity-80">รหัส: {user.id}</p>
-            <div className="mt-2 flex gap-2">
-                <Badge type={fixStartTime === 'OK' ? 'approved' : 'danger'}>Fix Start Time: {fixStartTime}</Badge>
+            <div className="flex items-center gap-2 text-sm opacity-80 mt-1">
+                <span>รหัส: {user.id}</span>
+                <span className="hidden md:inline">|</span>
+                <Badge type={fixStartTime === 'OK' ? 'approved' : 'danger'}>FixTime: {fixStartTime}</Badge>
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-              <Button variant="secondary" onClick={onLogout} className="border-white text-white hover:bg-white/20 hover:text-white">
+              <Button variant="secondary" size="sm" onClick={onLogout} className="border-white text-white hover:bg-white/20 hover:text-white px-3 py-1">
                 <i className="fas fa-sign-out-alt"></i> ออก
               </Button>
               {renderConnectionBadge()}
@@ -158,53 +159,58 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 space-y-6 flex-1 w-full">
+      <main className="max-w-4xl mx-auto p-4 md:p-6 w-full flex-1 flex flex-col gap-3 md:gap-6 min-h-0">
         {isLoading ? (
-            <div className="text-center py-10"><i className="fas fa-circle-notch fa-spin text-blue-500 text-3xl"></i><p className="mt-2 text-slate-500">กำลังโหลดข้อมูล...</p></div>
+            <div className="flex-1 flex flex-col items-center justify-center">
+                <i className="fas fa-circle-notch fa-spin text-blue-500 text-3xl"></i>
+                <p className="mt-2 text-slate-500">กำลังโหลดข้อมูล...</p>
+            </div>
         ) : (
             <>
+                {/* Status Messages */}
                 {todayRecord && todayRecord.checkin_status !== 'approved' && todayRecord.checkin_status !== null && (
-                    <Card className="bg-amber-50 border-amber-200">
-                        <div className="flex items-center gap-4 text-amber-800">
-                            <i className="fas fa-clock text-2xl"></i>
+                    <Card className="bg-amber-50 border-amber-200 py-3 px-4 shrink-0">
+                        <div className="flex items-center gap-3 text-amber-800">
+                            <i className="fas fa-clock text-xl"></i>
                             <div>
-                                <h3 className="font-bold">รอตรวจสอบเท็งโกะก่อนเริ่มงาน</h3>
-                                <p className="text-sm opacity-80">กรุณารอเจ้าหน้าที่ตรวจสอบข้อมูล</p>
+                                <h3 className="font-bold text-sm md:text-base">รอตรวจสอบเท็งโกะ</h3>
+                                <p className="text-xs opacity-80">กรุณารอเจ้าหน้าที่ตรวจสอบ</p>
                             </div>
                         </div>
                     </Card>
                 )}
 
                 {todayRecord && todayRecord.checkin_status === 'approved' && todayRecord.checkout_status === null && (
-                    <Card className="bg-emerald-50 border-emerald-200">
-                        <div className="flex items-center gap-4 text-emerald-800">
-                            <i className="fas fa-check-circle text-2xl"></i>
+                    <Card className="bg-emerald-50 border-emerald-200 py-3 px-4 shrink-0">
+                        <div className="flex items-center gap-3 text-emerald-800">
+                            <i className="fas fa-check-circle text-xl"></i>
                             <div>
-                                <h3 className="font-bold">พร้อมปฏิบัติงาน</h3>
-                                <p className="text-sm opacity-80">อย่าลืมทำรายการหลังเลิกงานเมื่อเสร็จสิ้นภารกิจ</p>
+                                <h3 className="font-bold text-sm md:text-base">พร้อมปฏิบัติงาน</h3>
+                                <p className="text-xs opacity-80">อย่าลืมทำรายการหลังเลิกงาน</p>
                             </div>
                         </div>
                     </Card>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Main Menu Grid - Responsive Layout */}
+                <div className="flex-1 grid grid-rows-3 md:grid-rows-1 md:grid-cols-3 gap-3 md:gap-6 min-h-0">
                     <Card 
                         onClick={() => {
                             if (checkinStatus.allowed) setView('checkin');
                             else alert(checkinStatus.message);
                         }} 
-                        className={`hover:border-blue-300 relative overflow-hidden group ${!checkinStatus.allowed ? 'opacity-60 grayscale' : ''}`}
+                        className={`h-full flex flex-col items-center justify-center hover:border-blue-300 relative overflow-hidden group ${!checkinStatus.allowed ? 'opacity-60 grayscale' : ''}`}
                     >
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-clipboard-check text-9xl text-blue-500"></i>
+                        <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-clipboard-check text-7xl md:text-9xl text-blue-500"></i>
                         </div>
-                        <div className="relative z-10">
-                            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                        <div className="relative z-10 text-center">
+                            <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-2 md:mb-4 mx-auto text-xl md:text-2xl">
                                 <i className="fas fa-clipboard-check"></i>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800">เท็งโกะก่อนเริ่มงาน</h3>
-                            <p className="text-slate-500 text-sm mt-1">ตรวจสอบสุขภาพก่อนขับขี่</p>
-                            {!checkinStatus.allowed && <p className="text-red-500 text-xs mt-2 font-bold">{checkinStatus.message}</p>}
+                            <h3 className="text-lg md:text-xl font-bold text-slate-800">เท็งโกะก่อนเริ่มงาน</h3>
+                            <p className="text-slate-500 text-xs md:text-sm mt-1">ตรวจสอบสุขภาพก่อนขับขี่</p>
+                            {!checkinStatus.allowed && <p className="text-red-500 text-[10px] md:text-xs mt-1 font-bold">{checkinStatus.message}</p>}
                         </div>
                     </Card>
 
@@ -215,33 +221,33 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                             else if (todayRecord.checkout_status) alert('ทำรายการเสร็จสิ้นแล้วสำหรับรอบนี้');
                             else alert('รอการอนุมัติเท็งโกะก่อนเริ่มงาน');
                         }}
-                        className={`hover:border-emerald-300 relative overflow-hidden group ${!todayRecord || todayRecord.checkin_status !== 'approved' || todayRecord.checkout_status ? 'opacity-60 grayscale' : ''}`}
+                        className={`h-full flex flex-col items-center justify-center hover:border-emerald-300 relative overflow-hidden group ${!todayRecord || todayRecord.checkin_status !== 'approved' || todayRecord.checkout_status ? 'opacity-60 grayscale' : ''}`}
                     >
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-flag-checkered text-9xl text-emerald-500"></i>
+                        <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-flag-checkered text-7xl md:text-9xl text-emerald-500"></i>
                         </div>
-                        <div className="relative z-10">
-                            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                        <div className="relative z-10 text-center">
+                            <div className="w-12 h-12 md:w-16 md:h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-2 md:mb-4 mx-auto text-xl md:text-2xl">
                                 <i className="fas fa-flag-checkered"></i>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800">เท็งโกะหลังเลิกงาน</h3>
-                            <p className="text-slate-500 text-sm mt-1">รายงานผลหลังปฏิบัติงาน</p>
+                            <h3 className="text-lg md:text-xl font-bold text-slate-800">เท็งโกะหลังเลิกงาน</h3>
+                            <p className="text-slate-500 text-xs md:text-sm mt-1">รายงานผลหลังปฏิบัติงาน</p>
                         </div>
                     </Card>
 
                     <Card 
                         onClick={() => setView('history')}
-                        className="hover:border-purple-300 relative overflow-hidden group"
+                        className="h-full flex flex-col items-center justify-center hover:border-purple-300 relative overflow-hidden group"
                     >
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-history text-9xl text-purple-500"></i>
+                        <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-history text-7xl md:text-9xl text-purple-500"></i>
                         </div>
-                        <div className="relative z-10">
-                            <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                        <div className="relative z-10 text-center">
+                            <div className="w-12 h-12 md:w-16 md:h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-2 md:mb-4 mx-auto text-xl md:text-2xl">
                                 <i className="fas fa-history"></i>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800">ประวัติการทำงาน</h3>
-                            <p className="text-slate-500 text-sm mt-1">ตรวจสอบสถิติย้อนหลัง</p>
+                            <h3 className="text-lg md:text-xl font-bold text-slate-800">ประวัติการทำงาน</h3>
+                            <p className="text-slate-500 text-xs md:text-sm mt-1">ตรวจสอบสถิติย้อนหลัง</p>
                         </div>
                     </Card>
                 </div>
@@ -249,7 +255,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
         )}
       </main>
 
-      <footer className="p-4 text-center text-slate-400 text-xs font-mono shrink-0">
+      <footer className="p-2 md:p-4 text-center text-slate-400 text-[10px] md:text-xs font-mono shrink-0">
         {SYSTEM_VERSION}
       </footer>
     </div>
