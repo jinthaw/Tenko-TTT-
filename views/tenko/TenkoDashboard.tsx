@@ -7,9 +7,10 @@ interface Props {
   view: string;
   records: TenkoRecord[];
   onSelectRecord: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
-export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord }) => {
+export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord, onDelete }) => {
   const pendingCheckin = records.filter(r => r.checkin_status === 'pending');
   // Drivers who are working (approved checkin) but haven't submitted checkout yet
   const activeDrivers = records.filter(r => r.checkin_status === 'approved' && !r.checkout_status);
@@ -252,7 +253,7 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord 
                         : (record.checkin_timestamp || record.checkin_real_timestamp);
                     
                     return (
-                        <Card key={record.__backendId} className="hover:shadow-md transition-all cursor-pointer group" onClick={() => onSelectRecord(record.__backendId)}>
+                        <Card key={record.__backendId} className="hover:shadow-md transition-all cursor-pointer group relative" onClick={() => onSelectRecord(record.__backendId)}>
                             <div className="flex justify-between items-start mb-3">
                                 <div>
                                     <h4 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors flex items-center flex-wrap gap-1">
@@ -261,8 +262,19 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord 
                                     </h4>
                                     <p className="text-xs text-slate-500">ID: {record.driver_id}</p>
                                 </div>
-                                {type !== 'history' && <Badge type="pending">รออนุมัติ</Badge>}
-                                {type === 'history' && <Badge type="approved">เสร็จสิ้น</Badge>}
+                                <div className="flex items-center gap-2">
+                                    {type !== 'history' && <Badge type="pending">รออนุมัติ</Badge>}
+                                    {type === 'history' && <Badge type="approved">เสร็จสิ้น</Badge>}
+                                    {onDelete && (type !== 'history') && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onDelete(record.__backendId); }}
+                                            className="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                                            title="ลบรายการนี้"
+                                        >
+                                            <i className="fas fa-trash-alt text-xs"></i>
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div className="text-sm text-slate-600 space-y-1">
                                 <p><i className="fas fa-calendar-day w-5 text-center text-slate-400"></i> {new Date(record.date).toLocaleDateString('th-TH')}</p>
@@ -292,7 +304,7 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord 
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-2">
                     {pendingCheckin.map(r => (
-                        <div key={r.__backendId} onClick={() => onSelectRecord(r.__backendId)} className="flex justify-between p-3 hover:bg-slate-50 rounded-lg cursor-pointer border border-slate-100 transition-colors">
+                        <div key={r.__backendId} onClick={() => onSelectRecord(r.__backendId)} className="flex justify-between p-3 hover:bg-slate-50 rounded-lg cursor-pointer border border-slate-100 transition-colors group relative">
                             <div>
                                 <p className="font-semibold text-slate-700 flex items-center gap-1">
                                     {r.driver_name}
@@ -300,8 +312,16 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord 
                                 </p>
                                 <p className="text-xs text-slate-400">ID: {r.driver_id}</p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex items-center gap-3">
                                 <p className="text-sm font-bold text-slate-600">{getSafeTime(r.checkin_timestamp || r.checkin_real_timestamp)}</p>
+                                {onDelete && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); onDelete(r.__backendId); }}
+                                        className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                                    >
+                                        <i className="fas fa-trash-alt text-[10px]"></i>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -353,13 +373,21 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord 
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-2">
                     {pendingCheckout.map(r => (
-                        <div key={r.__backendId} onClick={() => onSelectRecord(r.__backendId)} className="flex justify-between p-3 hover:bg-slate-50 rounded-lg cursor-pointer border border-slate-100 transition-colors">
+                        <div key={r.__backendId} onClick={() => onSelectRecord(r.__backendId)} className="flex justify-between p-3 hover:bg-slate-50 rounded-lg cursor-pointer border border-slate-100 transition-colors group relative">
                             <div>
                                 <p className="font-semibold text-slate-700">{r.driver_name}</p>
                                 <p className="text-xs text-slate-400">ID: {r.driver_id}</p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex items-center gap-3">
                                 <p className="text-sm font-bold text-slate-600">{getSafeDateTime(r.checkout_timestamp || r.checkout_real_timestamp)}</p>
+                                {onDelete && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); onDelete(r.__backendId); }}
+                                        className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                                    >
+                                        <i className="fas fa-trash-alt text-[10px]"></i>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}

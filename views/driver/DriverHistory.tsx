@@ -10,8 +10,9 @@ interface Props {
 }
 
 export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStartTime }) => {
+  // Show ALL records for this driver, sorted by date
   const myRecords = records
-    .filter(r => r.driver_id === user.id && r.checkin_status === 'approved' && r.checkout_status === 'approved')
+    .filter(r => r.driver_id === user.id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const currentMonth = new Date();
@@ -21,9 +22,17 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
   const getDayStatus = (day: number) => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const record = myRecords.find(r => r.date === dateStr);
-    if (record) return 'complete';
-    if (dateStr === new Date().toISOString().split('T')[0]) return 'today';
-    return 'none';
+    
+    if (!record) return 'none';
+    if (record.checkin_status === 'approved' && record.checkout_status === 'approved') return 'complete';
+    if (record.checkin_status === 'approved') return 'working';
+    return 'pending';
+  };
+
+  const getStatusBadge = (r: TenkoRecord) => {
+      if (r.checkin_status === 'approved' && r.checkout_status === 'approved') return <Badge type="approved">เสร็จสมบูรณ์</Badge>;
+      if (r.checkin_status === 'approved') return <Badge type="pending">กำลังปฏิบัติงาน</Badge>;
+      return <Badge type="danger">รอตรวจสอบ</Badge>;
   };
 
   return (
@@ -43,12 +52,12 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
              <Card className="bg-white border-l-4 border-blue-500">
                  <p className="text-sm text-slate-500">เดือนนี้</p>
                  <p className="text-3xl font-bold text-blue-600">{myRecords.filter(r => new Date(r.date).getMonth() === currentMonth.getMonth()).length}</p>
-                 <p className="text-xs text-slate-400">ครั้ง</p>
+                 <p className="text-xs text-slate-400">รายการ</p>
              </Card>
              <Card className="bg-white border-l-4 border-purple-500">
                  <p className="text-sm text-slate-500">ทั้งหมด</p>
                  <p className="text-3xl font-bold text-purple-600">{myRecords.length}</p>
-                 <p className="text-xs text-slate-400">ครั้ง</p>
+                 <p className="text-xs text-slate-400">รายการ</p>
              </Card>
              <Card className={`bg-white border-l-4 ${fixStartTime === 'OK' ? 'border-emerald-500' : 'border-red-500'}`}>
                  <p className="text-sm text-slate-500">Fix Start Time</p>
@@ -66,14 +75,21 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                     const status = getDayStatus(i+1);
                     return (
                         <div key={i} className={`
-                            h-10 flex items-center justify-center rounded-lg text-sm font-medium
-                            ${status === 'complete' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
-                              status === 'today' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-400'}
+                            h-10 flex items-center justify-center rounded-lg text-sm font-medium border
+                            ${status === 'complete' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
+                              status === 'working' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                              status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-200' : 
+                              'bg-slate-50 text-slate-300 border-slate-100'}
                         `}>
                             {i+1}
                         </div>
                     );
                 })}
+            </div>
+            <div className="flex gap-4 mt-3 text-xs justify-center text-slate-500">
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-100 rounded"></div> เสร็จสิ้น</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 rounded"></div> ทำงานอยู่</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-50 rounded"></div> รอตรวจ</div>
             </div>
         </Card>
 
@@ -88,20 +104,18 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                             </p>
                             <p className="text-xs text-slate-500">ID: {record.__backendId.substring(0, 8)}</p>
                         </div>
-                        <Badge type="approved">สมบูรณ์</Badge>
+                        {getStatusBadge(record)}
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                         <div className="p-2 bg-blue-50 rounded">
                             <p className="font-semibold text-blue-800 mb-1">ก่อนเริ่มงาน</p>
                             <p>เวลา: {record.checkin_timestamp ? new Date(record.checkin_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'}</p>
-                            <p>ผู้ตรวจ: {record.checkin_tenko_name}</p>
-                            <p>แอลกอฮอล์: {record.alcohol_checkin}</p>
+                            <p>ผู้ตรวจ: {record.checkin_tenko_name || '-'}</p>
                         </div>
-                        <div className="p-2 bg-emerald-50 rounded">
+                        <div className={`p-2 rounded ${record.checkout_status ? 'bg-emerald-50' : 'bg-slate-100 opacity-50'}`}>
                             <p className="font-semibold text-emerald-800 mb-1">หลังเลิกงาน</p>
                             <p>เวลา: {record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'}</p>
-                            <p>ผู้ตรวจ: {record.checkout_tenko_name}</p>
-                            <p>แอลกอฮอล์: {record.alcohol_checkout}</p>
+                            <p>ผู้ตรวจ: {record.checkout_tenko_name || '-'}</p>
                         </div>
                     </div>
                 </Card>

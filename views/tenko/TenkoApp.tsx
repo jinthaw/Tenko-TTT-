@@ -42,6 +42,13 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
     });
   };
 
+  const handleDeleteRecord = async (id: string) => {
+      if(confirm('คุณต้องการลบรายการนี้ทิ้งทันทีหรือไม่? (Driver ต้องส่งใหม่)')) {
+          await StorageService.delete(id);
+          handleUpdate();
+      }
+  };
+
   const SidebarItem = ({ view, icon, label }: { view: View; icon: string; label: string }) => (
     <div 
       onClick={() => { setCurrentView(view); setSelectedRecordId(null); }}
@@ -77,9 +84,9 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
         case 'analytics': return <TenkoAnalytics records={records} />;
         case 'report': return <TenkoReportPrint records={records} />;
         case 'completed': return <TenkoHistory records={records} onSelectRecord={setSelectedRecordId} onDelete={handleUpdate} />;
-        case 'queue-checkin': return <TenkoDashboard view="queue-checkin" records={records} onSelectRecord={setSelectedRecordId} />;
-        case 'queue-checkout': return <TenkoDashboard view="queue-checkout" records={records} onSelectRecord={setSelectedRecordId} />;
-        default: return <TenkoDashboard view="dashboard" records={records} onSelectRecord={setSelectedRecordId} />;
+        case 'queue-checkin': return <TenkoDashboard view="queue-checkin" records={records} onSelectRecord={setSelectedRecordId} onDelete={handleDeleteRecord} />;
+        case 'queue-checkout': return <TenkoDashboard view="queue-checkout" records={records} onSelectRecord={setSelectedRecordId} onDelete={handleDeleteRecord} />;
+        default: return <TenkoDashboard view="dashboard" records={records} onSelectRecord={setSelectedRecordId} onDelete={handleDeleteRecord} />;
     }
   };
 
