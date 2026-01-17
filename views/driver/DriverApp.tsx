@@ -20,30 +20,13 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
 
   const fetchData = async () => {
       try {
-          // Check explicit auth failure first
-          if (StorageService.getIsAuthFailed()) {
-              setConnectionStatus('error');
-          } else {
-             // Attempt sync
-             await StorageService.syncPendingData();
-             // If sync didn't throw and we are here, we might be online, 
-             // but we really know if getAll works from DB.
-             // StorageService.getAll swallows errors, so we rely on StorageService internal state if we wanted to be precise.
-             // For now, if getIsAuthFailed is false, we assume online or temporary offline.
-             setConnectionStatus('online');
-          }
-          
+          await StorageService.syncPendingData();
           const data = await StorageService.getAll();
           setRecords(data);
           setPendingCount(StorageService.getPendingCount());
-
-          // Re-check after operations
-          if (StorageService.getIsAuthFailed()) {
-              setConnectionStatus('error');
-          } else if (StorageService.getPendingCount() > 0) {
-              // If we have pending count after sync, we are likely offline (network issue)
-              setConnectionStatus('offline');
-          }
+          
+          // Use the definitive status from StorageService which tracks DB interactions
+          setConnectionStatus(StorageService.getConnectionStatus());
 
       } catch(e) {
           console.error(e);

@@ -12,6 +12,7 @@ const OFFLINE_KEY = 'tenko_offline_records';
 
 // Flag to stop retrying if authentication fails (wrong password/url)
 let isAuthFailed = false;
+let lastConnectionStatus: 'online' | 'offline' | 'error' = 'online';
 
 const getOfflineData = (): TenkoRecord[] => {
     try {
@@ -25,11 +26,39 @@ const saveOfflineData = (records: TenkoRecord[]) => {
     localStorage.setItem(OFFLINE_KEY, JSON.stringify(records));
 };
 
+const handleDBError = (e: any) => {
+    if (e.message?.includes('password') || e.code === '28P01') {
+        console.error("Auth failed:", e);
+        isAuthFailed = true;
+        lastConnectionStatus = 'error';
+    } else {
+        console.error("Connection failed:", e);
+        lastConnectionStatus = 'offline';
+    }
+};
+
+const handleDBSuccess = () => {
+    // Only recover if not in permanent auth failure
+    if (!isAuthFailed) {
+        lastConnectionStatus = 'online';
+    }
+};
+
 export const StorageService = {
+  getConnectionStatus: () => lastConnectionStatus,
+  getIsAuthFailed: () => isAuthFailed,
+  
   // --- Sync Mechanism ---
   syncPendingData: async (): Promise<number> => {
       // ถ้าไม่มี Connection String หรือ Authentication ผิดพลาด ให้ข้ามการ Sync
-      if (!CONNECTION_STRING || isAuthFailed) return 0;
+      if (!CONNECTION_STRING) {
+          lastConnectionStatus = 'offline';
+          return 0;
+      }
+      if (isAuthFailed) {
+          lastConnectionStatus = 'error';
+          return 0;
+      }
 
       const offlineRecords = getOfflineData();
       if (offlineRecords.length === 0) return 0;
@@ -52,15 +81,16 @@ export const StorageService = {
               } else {
                   // Insert
                   await pool.query(
-                    'INSERT INTO records (id, driver_id, date, data) VALUES ($1, $2, $3, $4)',
-                    [record.__backendId, record.driver_id, record.date, record]
+                    'INSERT INTO records (id, driver_id, date, data, checkin_status, checkout_status) VALUES ($1, $2, $3, $4, $5, $6)',
+                    [record.__backendId, record.driver_id, record.date, record, record.checkin_status, record.checkout_status]
                   );
               }
               syncedCount++;
+              handleDBSuccess();
           } catch (e: any) {
-              if (e.message?.includes('password') || e.code === '28P01') {
+              handleDBError(e);
+              if (isAuthFailed) {
                   console.error("Sync stopped: Authentication failed.");
-                  isAuthFailed = true;
                   remainingRecords.push(...offlineRecords.slice(offlineRecords.indexOf(record)));
                   break; 
               }
@@ -75,10 +105,6 @@ export const StorageService = {
 
   getPendingCount: (): number => {
       return getOfflineData().length;
-  },
-
-  getIsAuthFailed: (): boolean => {
-      return isAuthFailed;
   },
 
   // --- Records ---
@@ -97,13 +123,10 @@ export const StorageService = {
               checkin_status: row.checkin_status || row.data.checkin_status,
               checkout_status: row.checkout_status || row.data.checkout_status
             } as TenkoRecord));
+          handleDBSuccess();
         } catch (e: any) {
-          if (e.message?.includes('password') || e.code === '28P01') {
-             console.warn("Neon Authentication Failed: Switching to Offline Mode.");
-             isAuthFailed = true;
-          } else {
-             console.error("Failed to load data from Neon (Offline mode active)", e);
-          }
+          handleDBError(e);
+          console.error("Failed to load data from Neon (Offline mode active)", e);
         }
     }
 
@@ -134,9 +157,10 @@ export const StorageService = {
             'INSERT INTO records (id, driver_id, date, data, checkin_status, checkout_status) VALUES ($1, $2, $3, $4, $5, $6)',
             [id, fullRecord.driver_id, fullRecord.date, fullRecord, fullRecord.checkin_status, fullRecord.checkout_status]
           );
+          handleDBSuccess();
           return { isOk: true, data: fullRecord };
         } catch (e: any) {
-          if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
+          handleDBError(e);
           console.warn("Neon connection failed. Saving locally.", e);
         }
     }
@@ -155,9 +179,10 @@ export const StorageService = {
             'UPDATE records SET data = $1, checkin_status = $2, checkout_status = $3 WHERE id = $4',
             [record, record.checkin_status, record.checkout_status, record.__backendId]
           );
+          handleDBSuccess();
           return { isOk: true };
         } catch (e: any) {
-          if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
+          handleDBError(e);
           console.warn("Neon connection failed. Updating locally.", e);
         }
     }
@@ -179,13 +204,14 @@ export const StorageService = {
     if (CONNECTION_STRING && !isAuthFailed) {
         try {
           await pool.query('DELETE FROM records WHERE id = $1', [recordId]);
+          handleDBSuccess();
           
           const offline = getOfflineData().filter(r => r.__backendId !== recordId);
           saveOfflineData(offline);
           
           return { isOk: true };
         } catch (e: any) {
-          if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
+          handleDBError(e);
           console.warn("Neon delete failed. Attempting local delete only.", e);
         }
     }
@@ -206,6 +232,7 @@ export const StorageService = {
 
     try {
       const result = await pool.query('SELECT * FROM users');
+      handleDBSuccess();
       if (result.rows.length === 0) return defaults;
       return result.rows.map(row => ({
         id: row.id,
@@ -213,7 +240,7 @@ export const StorageService = {
         role: row.role as 'driver' | 'tenko'
       }));
     } catch (e: any) {
-      if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
+      handleDBError(e);
       // Offline fallback
       return defaults;
     }
@@ -227,8 +254,9 @@ export const StorageService = {
          ON CONFLICT (id) DO UPDATE SET name = $2, role = $3`,
         [user.id, user.name, user.role, user]
       );
+      handleDBSuccess();
     } catch (e: any) {
-      if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
+      handleDBError(e);
       console.error("Failed to save user (Offline)", e);
     }
   },
@@ -237,8 +265,9 @@ export const StorageService = {
     if (!CONNECTION_STRING || isAuthFailed) return;
     try {
       await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+      handleDBSuccess();
     } catch (e: any) {
-      if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
+      handleDBError(e);
       console.error("Failed to delete user", e);
     }
   }
