@@ -10,6 +10,9 @@ const CONNECTION_STRING = (import.meta as any).env?.VITE_DATABASE_URL || "";
 const pool = new Pool({ connectionString: CONNECTION_STRING });
 const OFFLINE_KEY = 'tenko_offline_records';
 
+// Flag to stop retrying if authentication fails (wrong password/url)
+let isAuthFailed = false;
+
 const getOfflineData = (): TenkoRecord[] => {
     try {
         return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
@@ -25,8 +28,8 @@ const saveOfflineData = (records: TenkoRecord[]) => {
 export const StorageService = {
   // --- Sync Mechanism ---
   syncPendingData: async (): Promise<number> => {
-      // ถ้าไม่มี Connection String ให้ข้ามการ Sync ไปเลย (ทำงาน Offline 100%)
-      if (!CONNECTION_STRING) return 0;
+      // ถ้าไม่มี Connection String หรือ Authentication ผิดพลาด ให้ข้ามการ Sync
+      if (!CONNECTION_STRING || isAuthFailed) return 0;
 
       const offlineRecords = getOfflineData();
       if (offlineRecords.length === 0) return 0;
@@ -54,7 +57,13 @@ export const StorageService = {
                   );
               }
               syncedCount++;
-          } catch (e) {
+          } catch (e: any) {
+              if (e.message?.includes('password') || e.code === '28P01') {
+                  console.error("Sync stopped: Authentication failed.");
+                  isAuthFailed = true;
+                  remainingRecords.push(...offlineRecords.slice(offlineRecords.indexOf(record)));
+                  break; 
+              }
               console.error("Sync failed for record", record.__backendId, e);
               remainingRecords.push(record);
           }
@@ -68,12 +77,16 @@ export const StorageService = {
       return getOfflineData().length;
   },
 
+  getIsAuthFailed: (): boolean => {
+      return isAuthFailed;
+  },
+
   // --- Records ---
   getAll: async (): Promise<TenkoRecord[]> => {
     let dbRecords: TenkoRecord[] = [];
     
-    // พยายามโหลดจาก DB เฉพาะเมื่อมี Connection String
-    if (CONNECTION_STRING) {
+    // พยายามโหลดจาก DB เฉพาะเมื่อมี Connection String และยังไม่เคย Auth Fail
+    if (CONNECTION_STRING && !isAuthFailed) {
         try {
           const result = await pool.query('SELECT * FROM records ORDER BY date DESC');
           dbRecords = result.rows.map(row => ({
@@ -81,13 +94,16 @@ export const StorageService = {
               __backendId: row.id,
               driver_id: row.driver_id,
               date: row.date,
-              // Map status fields explicitly if needed for query filtering later, 
-              // though they are inside 'data' jsonb too based on previous logic.
               checkin_status: row.checkin_status || row.data.checkin_status,
               checkout_status: row.checkout_status || row.data.checkout_status
             } as TenkoRecord));
-        } catch (e) {
-          console.error("Failed to load data from Neon (Offline mode active)", e);
+        } catch (e: any) {
+          if (e.message?.includes('password') || e.code === '28P01') {
+             console.warn("Neon Authentication Failed: Switching to Offline Mode.");
+             isAuthFailed = true;
+          } else {
+             console.error("Failed to load data from Neon (Offline mode active)", e);
+          }
         }
     }
 
@@ -112,14 +128,15 @@ export const StorageService = {
         date: record.date || ''
     } as TenkoRecord;
 
-    if (CONNECTION_STRING) {
+    if (CONNECTION_STRING && !isAuthFailed) {
         try {
           await pool.query(
             'INSERT INTO records (id, driver_id, date, data, checkin_status, checkout_status) VALUES ($1, $2, $3, $4, $5, $6)',
             [id, fullRecord.driver_id, fullRecord.date, fullRecord, fullRecord.checkin_status, fullRecord.checkout_status]
           );
           return { isOk: true, data: fullRecord };
-        } catch (e) {
+        } catch (e: any) {
+          if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
           console.warn("Neon connection failed. Saving locally.", e);
         }
     }
@@ -132,14 +149,15 @@ export const StorageService = {
   },
 
   update: async (record: TenkoRecord): Promise<{ isOk: boolean }> => {
-    if (CONNECTION_STRING) {
+    if (CONNECTION_STRING && !isAuthFailed) {
         try {
           await pool.query(
             'UPDATE records SET data = $1, checkin_status = $2, checkout_status = $3 WHERE id = $4',
             [record, record.checkin_status, record.checkout_status, record.__backendId]
           );
           return { isOk: true };
-        } catch (e) {
+        } catch (e: any) {
+          if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
           console.warn("Neon connection failed. Updating locally.", e);
         }
     }
@@ -158,7 +176,7 @@ export const StorageService = {
   },
 
   delete: async (recordId: string): Promise<{ isOk: boolean }> => {
-    if (CONNECTION_STRING) {
+    if (CONNECTION_STRING && !isAuthFailed) {
         try {
           await pool.query('DELETE FROM records WHERE id = $1', [recordId]);
           
@@ -166,7 +184,8 @@ export const StorageService = {
           saveOfflineData(offline);
           
           return { isOk: true };
-        } catch (e) {
+        } catch (e: any) {
+          if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
           console.warn("Neon delete failed. Attempting local delete only.", e);
         }
     }
@@ -183,7 +202,7 @@ export const StorageService = {
           ...TENKO_USERS.map(u => ({ ...u, role: 'tenko' as const }))
     ];
 
-    if (!CONNECTION_STRING) return defaults;
+    if (!CONNECTION_STRING || isAuthFailed) return defaults;
 
     try {
       const result = await pool.query('SELECT * FROM users');
@@ -193,30 +212,33 @@ export const StorageService = {
         name: row.name,
         role: row.role as 'driver' | 'tenko'
       }));
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
       // Offline fallback
       return defaults;
     }
   },
 
   saveUser: async (user: User) => {
-    if (!CONNECTION_STRING) return;
+    if (!CONNECTION_STRING || isAuthFailed) return;
     try {
       await pool.query(
         `INSERT INTO users (id, name, role, data) VALUES ($1, $2, $3, $4)
          ON CONFLICT (id) DO UPDATE SET name = $2, role = $3`,
         [user.id, user.name, user.role, user]
       );
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
       console.error("Failed to save user (Offline)", e);
     }
   },
 
   deleteUser: async (userId: string) => {
-    if (!CONNECTION_STRING) return;
+    if (!CONNECTION_STRING || isAuthFailed) return;
     try {
       await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('password') || e.code === '28P01') isAuthFailed = true;
       console.error("Failed to delete user", e);
     }
   }
