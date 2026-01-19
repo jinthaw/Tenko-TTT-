@@ -49,7 +49,7 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
       }
   };
 
-  // Nav Item component reusable for both Sidebar (Desktop) and BottomNav (Mobile)
+  // Nav Item component
   const NavItem = ({ view, icon, label, mobile = false }: { view: View; icon: string; label: string; mobile?: boolean }) => {
       const isActive = currentView === view;
       const count = records.filter(r => view === 'queue-checkin' ? r.checkin_status === 'pending' : r.checkout_status === 'pending').length;
@@ -62,7 +62,7 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
             >
                 <i className={`fas ${icon} text-lg mb-0.5`}></i>
                 <span className="text-[9px] leading-tight">{label.split(' ')[0]}</span>
-                {view.includes('queue') && count > 0 && (
+                {(view === 'queue-checkin' || view === 'queue-checkout') && count > 0 && (
                     <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[9px] flex items-center justify-center rounded-full font-bold border border-blue-900">
                         {count}
                     </span>
@@ -78,7 +78,7 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
         >
           <i className={`fas ${icon} w-6 text-center`}></i>
           <span className="font-medium">{label}</span>
-          {view.includes('queue') && count > 0 && (
+          {(view === 'queue-checkin' || view === 'queue-checkout') && count > 0 && (
             <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {count}
             </span>
@@ -88,14 +88,21 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
   };
 
   const renderContent = () => {
+    // CRITICAL: If a record is selected, always show ApprovalView regardless of currentView
     if (selectedRecordId) {
        const record = records.find(r => r.__backendId === selectedRecordId);
        if (!record) return <div>Record not found</div>;
+       
+       // Determine approval type based on record status or current view context
+       let approvalType: 'checkin' | 'checkout' | 'view' = 'view';
+       if (record.checkin_status === 'pending') approvalType = 'checkin';
+       else if (record.checkout_status === 'pending') approvalType = 'checkout';
+
        return (
          <ApprovalView 
             record={record} 
             user={user}
-            type={currentView === 'queue-checkin' ? 'checkin' : currentView === 'queue-checkout' ? 'checkout' : 'view'}
+            type={approvalType}
             onBack={() => setSelectedRecordId(null)}
             onSuccess={handleUpdate}
          />
@@ -115,7 +122,7 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
 
   return (
     <div className="flex flex-col md:flex-row h-full bg-slate-50 overflow-hidden">
-      {/* Sidebar - Hidden on Mobile */}
+      {/* Sidebar - Desktop */}
       <aside className="hidden md:flex w-64 bg-gradient-to-b from-blue-900 to-blue-700 text-white flex-col shadow-xl z-20 print:hidden h-full">
         <div className="p-6 border-b border-blue-500/30">
             <div className="flex items-center gap-3">
@@ -164,7 +171,7 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
         {renderContent()}
       </main>
 
-      {/* Bottom Navigation - Hidden on Desktop */}
+      {/* Bottom Navigation - Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-slate-400 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-30 flex justify-around items-center border-t border-slate-800 safe-area-pb">
             <NavItem view="dashboard" icon="fa-home" label="Home" mobile />
             <NavItem view="queue-checkin" icon="fa-clipboard-check" label="In" mobile />
