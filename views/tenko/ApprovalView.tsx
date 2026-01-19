@@ -34,7 +34,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     const loadHistory = async () => {
         const allRecords = await StorageService.getAll();
         
-        // --- ส่วนที่ 1: หาวันเลิกงานล่าสุด ---
         const previousRecords = allRecords
             .filter(r => r.driver_id === record.driver_id && r.checkout_timestamp && r.__backendId !== record.__backendId)
             .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
@@ -42,7 +41,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             setLastCheckout(new Date(previousRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
         }
 
-        // --- ส่วนที่ 2: Logic Fix Start Time ใหม่ (นับตามสัปดาห์) ---
         const driverRecords = allRecords
             .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
             .sort((a, b) => new Date(b.checkin_timestamp!).getTime() - new Date(a.checkin_timestamp!).getTime());
@@ -52,7 +50,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             return;
         }
 
-        // ฟังก์ชันหา "วันจันทร์" ของสัปดาห์นั้นๆ
         const getMonday = (dateStr: string) => {
             const d = new Date(dateStr);
             const day = d.getDay();
@@ -60,16 +57,13 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             return new Date(d.setDate(diff)).toISOString().split('T')[0];
         };
 
-        // ตรวจสอบข้อมูลของ "สัปดาห์ปัจจุบัน" (สัปดาห์ของรายการที่กำลังตรวจอยู่)
         const currentRecordMonday = getMonday(form.checkin_timestamp!);
         const currentWeekRecords = driverRecords.filter(r => getMonday(r.checkin_timestamp!) === currentRecordMonday);
 
-        // หาเวลาอ้างอิงของสัปดาห์นี้ (วันจันทร์ หรือ วันแรกที่มาทำงาน)
         const mondayRecord = currentWeekRecords.find(r => new Date(r.checkin_timestamp!).getDay() === 1);
         const referenceRecord = mondayRecord || (currentWeekRecords.length > 0 ? currentWeekRecords[currentWeekRecords.length - 1] : null);
 
         if (!referenceRecord) {
-            // ถ้าเป็นสัปดาห์ใหม่เอี่ยมและยังไม่มีประวัติที่ approved เลย ให้ถือว่า OK
             setFixStartStatus('OK');
             return;
         }
@@ -82,7 +76,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             hour12: false
         });
 
-        // ตรวจสอบรายการที่กำลังเปิดดูอยู่ (form.checkin_timestamp) เทียบกับค่าอ้างอิง
         const currentCheckTime = new Date(form.checkin_timestamp!);
         const currentMinutes = currentCheckTime.getHours() * 60 + currentCheckTime.getMinutes();
         const diff = Math.abs(currentMinutes - refTotalMinutes);
@@ -134,8 +127,14 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
   const handleDelete = async () => {
       if(confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?\n\nการลบจะทำให้ข้อมูลหายไป และพนักงานขับรถสามารถส่งรายการเข้ามาใหม่ได้')) {
           setSubmitting(true);
-          await StorageService.delete(record.__backendId);
-          onSuccess();
+          try {
+              await StorageService.delete(record.__backendId);
+              onSuccess();
+          } catch (e) {
+              alert('ล้มเหลวในการลบข้อมูล');
+          } finally {
+              setSubmitting(false);
+          }
       }
   }
 

@@ -58,10 +58,16 @@ export const StaffManagement: React.FC = () => {
       if (!cleanupSearch) return;
       setSearching(true);
       try {
+          // Force a fresh fetch from the storage/server
           const allRecords = await StorageService.getAll();
           const matches = allRecords
-            .filter(r => r.driver_id.includes(cleanupSearch) || r.driver_name.includes(cleanupSearch))
-            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            .filter(r => r.driver_id === cleanupSearch || r.driver_name.includes(cleanupSearch))
+            .sort((a,b) => {
+                // Priority to pending records
+                if (a.checkin_status === 'pending' && b.checkin_status !== 'pending') return -1;
+                if (a.checkin_status !== 'pending' && b.checkin_status === 'pending') return 1;
+                return new Date(b.date).getTime() - new Date(a.date).getTime();
+            });
           
           setCleanupRecords(matches);
       } catch (e) {
@@ -72,9 +78,20 @@ export const StaffManagement: React.FC = () => {
   };
 
   const handleForceDeleteRecord = async (recordId: string) => {
-      if (confirm('คุณต้องการ "ลบ" รายการนี้ออกจากระบบทันทีใช่หรือไม่?\n(การกระทำนี้ไม่สามารถกู้คืนได้)')) {
-          await StorageService.delete(recordId);
-          handleSearchRecords(); 
+      if (confirm('ยืนยันลบรายการที่ค้าง?\n(พนักงานจะสามารถส่งข้อมูลใหม่ได้ทันที)')) {
+          setSearching(true);
+          try {
+              const result = await StorageService.delete(recordId);
+              if (result.isOk) {
+                  // Re-search to refresh the list
+                  await handleSearchRecords();
+                  alert('ลบข้อมูลเรียบร้อยแล้ว');
+              }
+          } catch (e) {
+              alert('ล้มเหลวในการลบข้อมูล: ' + e);
+          } finally {
+              setSearching(false);
+          }
       }
   };
 
@@ -123,7 +140,6 @@ export const StaffManagement: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col pb-4 animate-fade-in">
-        {/* Responsive Header with Tabs */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shrink-0 mb-6">
             <div>
                 <h2 className="text-2xl font-bold text-slate-800">จัดการระบบ (Settings)</h2>
@@ -146,7 +162,6 @@ export const StaffManagement: React.FC = () => {
             </div>
         </div>
         
-        {/* Content Area */}
         <div className="flex-1 min-h-0">
             {activeTab === 'users' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full pb-2 animate-slide-up">
@@ -176,7 +191,7 @@ export const StaffManagement: React.FC = () => {
                                     <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                                     <input 
                                         className="pl-11 pr-4 py-3 rounded-xl border-2 border-slate-200 w-full focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 shadow-sm text-lg"
-                                        placeholder="ระบุรหัสพนักงาน (เช่น 655)"
+                                        placeholder="ระบุรหัสพนักงาน (เช่น 342)"
                                         value={cleanupSearch}
                                         onChange={e => setCleanupSearch(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleSearchRecords()}
@@ -189,12 +204,12 @@ export const StaffManagement: React.FC = () => {
 
                             <div className="bg-white rounded-xl border border-slate-200 flex-1 overflow-hidden flex flex-col shadow-sm">
                                 <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                    ประวัติที่พบในระบบ
+                                    รายการที่พบ (ลำดับความสำคัญ: รายการค้าง)
                                 </div>
                                 <div className="overflow-y-auto p-4 space-y-3 flex-1 custom-scrollbar">
                                     {cleanupRecords.length > 0 ? (
                                         cleanupRecords.map(r => (
-                                            <div key={r.__backendId} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-slate-100 rounded-xl hover:bg-red-50 hover:border-red-200 transition-all bg-white shadow-sm gap-4">
+                                            <div key={r.__backendId} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl transition-all shadow-sm gap-4 ${r.checkin_status === 'pending' ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-3">
                                                         <span className="font-bold text-lg text-slate-800">{r.driver_name}</span>
@@ -202,26 +217,26 @@ export const StaffManagement: React.FC = () => {
                                                     </div>
                                                     <div className="text-sm text-slate-500 mt-2 flex flex-wrap gap-x-6 gap-y-1">
                                                         <span className="flex items-center gap-1.5"><i className="fas fa-calendar text-slate-400"></i> {r.date}</span>
-                                                        <span className="flex items-center gap-1.5"><i className="fas fa-clock text-slate-400"></i> {r.checkin_timestamp ? new Date(r.checkin_timestamp).toLocaleTimeString('th-TH') : '-'}</span>
+                                                        <span className="flex items-center gap-1.5"><i className="fas fa-clock text-slate-400"></i> In: {r.checkin_timestamp ? new Date(r.checkin_timestamp).toLocaleTimeString('th-TH') : (r.checkin_real_timestamp ? new Date(r.checkin_real_timestamp).toLocaleTimeString('th-TH') : '-')}</span>
                                                     </div>
                                                     <div className="mt-3 flex gap-2">
                                                         <Badge type={r.checkin_status === 'approved' ? 'approved' : 'pending'}>
-                                                            In: {r.checkin_status || 'Wait'}
+                                                            Check-in: {r.checkin_status === 'pending' ? 'รออนุมัติ' : r.checkin_status || 'Wait'}
                                                         </Badge>
                                                         <Badge type={r.checkout_status === 'approved' ? 'approved' : r.checkout_status === 'pending' ? 'pending' : 'neutral'}>
-                                                            Out: {r.checkout_status || '-'}
+                                                            Check-out: {r.checkout_status === 'pending' ? 'รออนุมัติ' : r.checkout_status || '-'}
                                                         </Badge>
                                                     </div>
                                                 </div>
-                                                <Button size="sm" variant="danger" onClick={() => handleForceDeleteRecord(r.__backendId)} className="w-full sm:w-auto shadow-sm">
-                                                    <i className="fas fa-trash-alt"></i> ลบรายการนี้
+                                                <Button size="sm" variant="danger" onClick={() => handleForceDeleteRecord(r.__backendId)} className="w-full sm:w-auto shadow-sm" isLoading={searching}>
+                                                    <i className="fas fa-trash-alt"></i> บังคับลบ
                                                 </Button>
                                             </div>
                                         ))
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-slate-400 py-10 opacity-50">
                                             <i className="fas fa-search text-5xl mb-4"></i>
-                                            <p className="text-lg">{searching ? 'กำลังค้นหา...' : 'กรอกรหัสพนักงานแล้วกดค้นหา'}</p>
+                                            <p className="text-lg">{searching ? 'กำลังค้นหา...' : 'กรอกรหัสพนักงาน (เช่น 342) แล้วกดค้นหา'}</p>
                                         </div>
                                     )}
                                 </div>
@@ -232,7 +247,6 @@ export const StaffManagement: React.FC = () => {
             )}
         </div>
 
-        {/* User Modal */}
         {isModalOpen && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
                 <Card className="w-full max-w-md shadow-2xl animate-scale-up">

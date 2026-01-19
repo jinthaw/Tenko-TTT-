@@ -7,7 +7,7 @@ interface Props {
   view: string;
   records: TenkoRecord[];
   onSelectRecord: (id: string) => void;
-  onDelete?: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord, onDelete }) => {
@@ -140,18 +140,31 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
       </div>
       <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
         {items.map(r => (
-          <div key={r.__backendId} onClick={() => onSelectRecord(r.__backendId)} className="flex justify-between p-3 hover:bg-slate-50 rounded-lg cursor-pointer border border-slate-100 transition-all hover:border-blue-200 group">
-            <div>
-              <p className="font-semibold text-slate-700 flex items-center flex-wrap gap-1">
-                {r.driver_name}
-                {title.includes('ก่อนเริ่มงาน') && getFixStartBadge(r)}
-              </p>
-              <p className="text-[10px] text-slate-400">ID: {r.driver_id} • {new Date(r.date).toLocaleDateString('th-TH')}</p>
+          <div key={r.__backendId} className="group relative flex items-center gap-2">
+            <div 
+                onClick={() => onSelectRecord(r.__backendId)} 
+                className="flex-1 flex justify-between p-3 bg-white hover:bg-slate-50 rounded-lg cursor-pointer border border-slate-100 transition-all hover:border-blue-200"
+            >
+                <div>
+                  <p className="font-semibold text-slate-700 flex items-center flex-wrap gap-1">
+                    {r.driver_name}
+                    {title.includes('ก่อนเริ่มงาน') && getFixStartBadge(r)}
+                  </p>
+                  <p className="text-[10px] text-slate-400">ID: {r.driver_id} • {new Date(r.date).toLocaleDateString('th-TH')}</p>
+                </div>
+                <div className="text-right flex items-center gap-3">
+                  <p className="text-sm font-bold text-slate-600">{getSafeTime(title.includes('หลังเลิกงาน') ? r.checkout_real_timestamp : r.checkin_real_timestamp)}</p>
+                  <i className="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 transition-colors"></i>
+                </div>
             </div>
-            <div className="text-right flex items-center gap-3">
-              <p className="text-sm font-bold text-slate-600">{getSafeTime(title.includes('หลังเลิกงาน') ? r.checkout_real_timestamp : r.checkin_real_timestamp)}</p>
-              <i className="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 transition-colors"></i>
-            </div>
+            {/* Direct Delete Button for Queue Items */}
+            <button 
+                onClick={(e) => { e.stopPropagation(); onDelete(r.__backendId); }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity w-10 h-10 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full"
+                title="ลบรายการ"
+            >
+                <i className="fas fa-trash-alt"></i>
+            </button>
           </div>
         ))}
         {items.length === 0 && (
@@ -188,8 +201,8 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
     );
   }
 
-  if (view === 'queue-checkin') return <div className="animate-fade-in">{renderQueueList('รอตรวจก่อนเริ่มงาน', 'fa-clock', pendingCheckin, 'amber')}</div>;
-  if (view === 'queue-checkout') return <div className="animate-fade-in">{renderQueueList('รอตรวจหลังเลิกงาน', 'fa-flag-checkered', pendingCheckout, 'purple')}</div>;
+  if (view === 'queue-checkin') return <div className="animate-fade-in h-[600px]">{renderQueueList('รอตรวจก่อนเริ่มงาน', 'fa-clock', pendingCheckin, 'amber')}</div>;
+  if (view === 'queue-checkout') return <div className="animate-fade-in h-[600px]">{renderQueueList('รอตรวจหลังเลิกงาน', 'fa-flag-checkered', pendingCheckout, 'purple')}</div>;
 
   return null;
 };
