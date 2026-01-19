@@ -17,7 +17,6 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
   const completed = records.filter(r => r.checkin_status === 'approved' && r.checkout_status === 'approved');
   const today = new Date().toISOString().split('T')[0];
 
-  // Helper: Get Monday of the week
   const getMonday = (dateStr: string) => {
     const d = new Date(dateStr);
     const day = d.getDay();
@@ -25,7 +24,12 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
     return new Date(d.setDate(diff)).toISOString().split('T')[0];
   };
 
-  // Centralized Logic for Fix Start Time calculation
+  const calculateResult = (targetTime: string, refMinutes: number) => {
+      const d = new Date(targetTime);
+      const m = d.getHours() * 60 + d.getMinutes();
+      return Math.abs(m - refMinutes) > 120 ? 'NG' : 'OK';
+  };
+
   const getFixStartInfo = (targetRecord: TenkoRecord) => {
     const driverApproved = records
       .filter(r => r.driver_id === targetRecord.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
@@ -35,7 +39,6 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
     const targetMonday = getMonday(targetDate);
     
     const weekRecords = driverApproved.filter(r => getMonday(r.checkin_timestamp!) === targetMonday);
-    
     const mondayRecord = weekRecords.find(r => new Date(r.checkin_timestamp!).getDay() === 1);
     const referenceRecord = mondayRecord || weekRecords[0];
 
@@ -48,22 +51,10 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
     const checkTimeStr = targetRecord.checkin_timestamp || targetRecord.checkin_real_timestamp;
     if (!checkTimeStr) return { status: 'OK', time: displayTime };
 
-    const checkDate = new Date(checkTimeStr);
-    const checkMinutes = checkDate.getHours() * 60 + checkDate.getMinutes();
-    // Fix: Using refMinutes instead of the undefined refTotalMinutes
-    const isNG = Math.abs(checkMinutes - refMinutes) > 120;
-
-    return { status: isNG ? 'NG' : 'OK', time: displayTime };
-  };
-  
-  // Added for calculation inside loop where refTotalMinutes might be missing context
-  const calculateResult = (targetTime: string, refMinutes: number) => {
-      const d = new Date(targetTime);
-      const m = d.getHours() * 60 + d.getMinutes();
-      return Math.abs(m - refMinutes) > 120 ? 'NG' : 'OK';
+    const result = calculateResult(checkTimeStr, refMinutes);
+    return { status: result, time: displayTime };
   };
 
-  // Pre-calculate Stats for the Month
   const stats = useMemo(() => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
@@ -97,33 +88,14 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
   };
 
   const getFixStartBadge = (record: TenkoRecord) => {
-    // Only care about checking records that have a check-in time
-    const timeToCheck = record.checkin_timestamp || record.checkin_real_timestamp;
-    if (!timeToCheck) return null;
-
-    // We need to fetch the weekly reference for this driver
-    const driverApproved = records
-      .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
-      .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
-
-    const targetMonday = getMonday(timeToCheck);
-    const weekRecords = driverApproved.filter(r => getMonday(r.checkin_timestamp!) === targetMonday);
-    const mondayRecord = weekRecords.find(r => new Date(r.checkin_timestamp!).getDay() === 1);
-    const referenceRecord = mondayRecord || weekRecords[0];
-
-    if (!referenceRecord) return <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">First Entry</span>;
-
-    const refDate = new Date(referenceRecord.checkin_timestamp!);
-    const refMinutes = refDate.getHours() * 60 + refDate.getMinutes();
-    const displayTime = refDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-    
-    const result = calculateResult(timeToCheck, refMinutes);
+    const info = getFixStartInfo(record);
+    if (info.status === 'New') return <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">First Entry</span>;
 
     return (
       <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${
-        result === 'NG' ? 'bg-red-100 text-red-600 border-red-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'
+        info.status === 'NG' ? 'bg-red-100 text-red-600 border-red-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'
       }`}>
-        {result === 'NG' ? 'NG' : 'OK'} (Ref: {displayTime})
+        {info.status} (Ref: {info.time})
       </span>
     );
   };
@@ -172,12 +144,12 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
             <div>
               <p className="font-semibold text-slate-700 flex items-center flex-wrap gap-1">
                 {r.driver_name}
-                {title.includes('ก่อนงาน') && getFixStartBadge(r)}
+                {title.includes('ก่อนเริ่มงาน') && getFixStartBadge(r)}
               </p>
               <p className="text-[10px] text-slate-400">ID: {r.driver_id} • {new Date(r.date).toLocaleDateString('th-TH')}</p>
             </div>
             <div className="text-right flex items-center gap-3">
-              <p className="text-sm font-bold text-slate-600">{getSafeTime(title.includes('หลังงาน') ? r.checkout_timestamp || r.checkout_real_timestamp : r.checkin_timestamp || r.checkin_real_timestamp)}</p>
+              <p className="text-sm font-bold text-slate-600">{getSafeTime(title.includes('หลังเลิกงาน') ? r.checkout_real_timestamp : r.checkin_real_timestamp)}</p>
               <i className="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 transition-colors"></i>
             </div>
           </div>
@@ -215,6 +187,9 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
       </div>
     );
   }
+
+  if (view === 'queue-checkin') return <div className="animate-fade-in">{renderQueueList('รอตรวจก่อนเริ่มงาน', 'fa-clock', pendingCheckin, 'amber')}</div>;
+  if (view === 'queue-checkout') return <div className="animate-fade-in">{renderQueueList('รอตรวจหลังเลิกงาน', 'fa-flag-checkered', pendingCheckout, 'purple')}</div>;
 
   return null;
 };

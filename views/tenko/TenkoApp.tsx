@@ -88,15 +88,17 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
   };
 
   const renderContent = () => {
-    // CRITICAL: If a record is selected, always show ApprovalView regardless of currentView
+    // CRITICAL: Handle selection first
     if (selectedRecordId) {
        const record = records.find(r => r.__backendId === selectedRecordId);
        if (!record) return <div>Record not found</div>;
        
-       // Determine approval type based on record status or current view context
        let approvalType: 'checkin' | 'checkout' | 'view' = 'view';
-       if (record.checkin_status === 'pending') approvalType = 'checkin';
-       else if (record.checkout_status === 'pending') approvalType = 'checkout';
+       if (record.checkin_status === 'pending') {
+           approvalType = 'checkin';
+       } else if (record.checkout_status === 'pending') {
+           approvalType = 'checkout';
+       }
 
        return (
          <ApprovalView 
