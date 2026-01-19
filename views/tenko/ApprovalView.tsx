@@ -34,6 +34,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     const loadHistory = async () => {
         const allRecords = await StorageService.getAll();
         
+        // --- ส่วนที่ 1: หาวันเลิกงานล่าสุด ---
         const previousRecords = allRecords
             .filter(r => r.driver_id === record.driver_id && r.checkout_timestamp && r.__backendId !== record.__backendId)
             .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
@@ -41,27 +42,59 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             setLastCheckout(new Date(previousRecords[0].checkout_timestamp!).toLocaleString('th-TH'));
         }
 
+        // --- ส่วนที่ 2: Logic Fix Start Time ใหม่ (นับตามสัปดาห์) ---
         const driverRecords = allRecords
-          .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
-          .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
-        
-        if (driverRecords.length > 0) {
-            const mondayRecords = driverRecords.filter(r => new Date(r.checkin_timestamp!).getDay() === 1);
-            if (mondayRecords.length > 0) {
-                const firstMonday = new Date(mondayRecords[0].checkin_timestamp!);
-                const firstMondayTime = firstMonday.getHours() * 60 + firstMonday.getMinutes();
-                const currentRecTime = new Date(form.checkin_timestamp!).getHours() * 60 + new Date(form.checkin_timestamp!).getMinutes();
-                const diff = Math.abs(currentRecTime - firstMondayTime);
-                setFixStartStatus(diff > 120 ? 'NG' : 'OK');
-            } else {
-                setFixStartStatus('OK (No Monday Record)');
-            }
-        } else {
+            .filter(r => r.driver_id === record.driver_id && r.checkin_timestamp && r.checkin_status === 'approved')
+            .sort((a, b) => new Date(b.checkin_timestamp!).getTime() - new Date(a.checkin_timestamp!).getTime());
+
+        if (driverRecords.length === 0) {
             setFixStartStatus('OK (First Record)');
+            return;
+        }
+
+        // ฟังก์ชันหา "วันจันทร์" ของสัปดาห์นั้นๆ
+        const getMonday = (dateStr: string) => {
+            const d = new Date(dateStr);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(d.setDate(diff)).toISOString().split('T')[0];
+        };
+
+        // ตรวจสอบข้อมูลของ "สัปดาห์ปัจจุบัน" (สัปดาห์ของรายการที่กำลังตรวจอยู่)
+        const currentRecordMonday = getMonday(form.checkin_timestamp!);
+        const currentWeekRecords = driverRecords.filter(r => getMonday(r.checkin_timestamp!) === currentRecordMonday);
+
+        // หาเวลาอ้างอิงของสัปดาห์นี้ (วันจันทร์ หรือ วันแรกที่มาทำงาน)
+        const mondayRecord = currentWeekRecords.find(r => new Date(r.checkin_timestamp!).getDay() === 1);
+        const referenceRecord = mondayRecord || (currentWeekRecords.length > 0 ? currentWeekRecords[currentWeekRecords.length - 1] : null);
+
+        if (!referenceRecord) {
+            // ถ้าเป็นสัปดาห์ใหม่เอี่ยมและยังไม่มีประวัติที่ approved เลย ให้ถือว่า OK
+            setFixStartStatus('OK');
+            return;
+        }
+
+        const refDate = new Date(referenceRecord.checkin_timestamp!);
+        const refTotalMinutes = refDate.getHours() * 60 + refDate.getMinutes();
+        const displayTime = refDate.toLocaleTimeString('th-TH', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false
+        });
+
+        // ตรวจสอบรายการที่กำลังเปิดดูอยู่ (form.checkin_timestamp) เทียบกับค่าอ้างอิง
+        const currentCheckTime = new Date(form.checkin_timestamp!);
+        const currentMinutes = currentCheckTime.getHours() * 60 + currentCheckTime.getMinutes();
+        const diff = Math.abs(currentMinutes - refTotalMinutes);
+
+        if (diff > 120) {
+            setFixStartStatus(`NG (Ref: ${displayTime})`);
+        } else {
+            setFixStartStatus(`OK (Ref: ${displayTime})`);
         }
     };
     loadHistory();
-  }, [record.driver_id, form.checkin_timestamp]);
+  }, [record.driver_id, form.checkin_timestamp, record.__backendId]);
 
 
   const updateForm = (k: keyof TenkoRecord, v: any) => setForm(p => ({ ...p, [k]: v }));
@@ -335,7 +368,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                 <i className="fas fa-save"></i> บันทึกข้อมูล (Save)
             </Button>
             
-            {/* Delete Button Available Everywhere */}
             <Button onClick={handleDelete} isLoading={submitting} variant="danger" className="w-full bg-white text-red-600 border-2 border-red-200 hover:bg-red-50 hover:border-red-500">
                 <i className="fas fa-trash-alt"></i> ลบข้อมูล (เพื่อให้ส่งใหม่)
             </Button>

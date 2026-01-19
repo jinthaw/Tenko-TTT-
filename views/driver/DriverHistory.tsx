@@ -7,10 +7,10 @@ interface Props {
   records: TenkoRecord[];
   onBack: () => void;
   fixStartTime: string;
+  displayTime: string;
 }
 
-export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStartTime }) => {
-  // Show ALL records for this driver, sorted by date
+export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStartTime, displayTime }) => {
   const myRecords = records
     .filter(r => r.driver_id === user.id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -60,9 +60,12 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                  <p className="text-xs text-slate-400">รายการ</p>
              </Card>
              <Card className={`bg-white border-l-4 ${fixStartTime === 'OK' ? 'border-emerald-500' : 'border-red-500'}`}>
-                 <p className="text-sm text-slate-500">Fix Start Time</p>
-                 <p className={`text-3xl font-bold ${fixStartTime === 'OK' ? 'text-emerald-600' : 'text-red-600'}`}>{fixStartTime}</p>
-                 <p className="text-xs text-slate-400">{fixStartTime === 'OK' ? 'ปกติ' : 'ผิดปกติ'}</p>
+                 <p className="text-sm text-slate-500">Fix Start Time สัปดาห์นี้</p>
+                 <p className={`text-3xl font-bold ${fixStartTime === 'OK' ? 'text-emerald-600' : 'text-red-600'}`}>"{fixStartTime}"</p>
+                 <div className="flex justify-between items-center mt-1">
+                    <p className="text-xs text-slate-400">{fixStartTime === 'OK' ? 'ปกติ' : 'ผิดปกติ'}</p>
+                    <p className="text-[10px] font-bold text-slate-500">Ref: {displayTime}</p>
+                 </div>
              </Card>
         </div>
 

@@ -25,10 +25,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
           const data = await StorageService.getAll();
           setRecords(data);
           setPendingCount(StorageService.getPendingCount());
-          
-          // Use the definitive status from StorageService which tracks DB interactions
           setConnectionStatus(StorageService.getConnectionStatus());
-
       } catch(e) {
           console.error(e);
           setConnectionStatus('offline');
@@ -39,7 +36,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000); // Polling every 10s
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,37 +47,61 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
     const driverRecords = records
       .filter(r => r.driver_id === user.id && r.checkout_timestamp)
       .sort((a, b) => new Date(b.checkout_timestamp!).getTime() - new Date(a.checkout_timestamp!).getTime());
-    
     return driverRecords.length > 0 ? new Date(driverRecords[0].checkout_timestamp!) : null;
   };
 
   const checkFixStartTime = () => {
     const driverRecords = records
-      .filter(r => r.driver_id === user.id && r.checkin_timestamp && r.checkin_status === 'approved')
-      .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
+        .filter(r => r.driver_id === user.id && r.checkin_timestamp && r.checkin_status === 'approved')
+        .sort((a, b) => new Date(b.checkin_timestamp!).getTime() - new Date(a.checkin_timestamp!).getTime());
 
-    if (driverRecords.length === 0) return 'OK';
+    if (driverRecords.length === 0) return { status: 'OK', time: '--:--' };
 
-    const mondayRecords = driverRecords.filter(r => new Date(r.checkin_timestamp!).getDay() === 1);
-    if (mondayRecords.length === 0) return 'OK';
+    const getMonday = (date: string) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff)).toISOString().split('T')[0];
+    };
 
-    const firstMonday = new Date(mondayRecords[0].checkin_timestamp!);
-    const firstMondayTime = firstMonday.getHours() * 60 + firstMonday.getMinutes();
+    const weeks: Record<string, TenkoRecord[]> = {};
+    driverRecords.forEach(record => {
+        const mondayStr = getMonday(record.checkin_timestamp!);
+        if (!weeks[mondayStr]) weeks[mondayStr] = [];
+        weeks[mondayStr].push(record);
+    });
 
-    for (let record of driverRecords) {
-      const checkDate = new Date(record.checkin_timestamp!);
-      const checkTime = checkDate.getHours() * 60 + checkDate.getMinutes();
-      const diff = Math.abs(checkTime - firstMondayTime);
-      if (diff > 120) return 'NG';
+    const latestMonday = Object.keys(weeks).sort().reverse()[0];
+    const currentWeekRecords = weeks[latestMonday];
+
+    const mondayRecord = currentWeekRecords.find(r => new Date(r.checkin_timestamp!).getDay() === 1);
+    const referenceRecord = mondayRecord || currentWeekRecords[currentWeekRecords.length - 1];
+    
+    const refDate = new Date(referenceRecord.checkin_timestamp!);
+    const displayTime = refDate.toLocaleTimeString('th-TH', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+    });
+
+    const refTotalMinutes = refDate.getHours() * 60 + refDate.getMinutes();
+
+    let status = 'OK';
+    for (let record of currentWeekRecords) {
+        const checkDate = new Date(record.checkin_timestamp!);
+        const checkTime = checkDate.getHours() * 60 + checkDate.getMinutes();
+        if (Math.abs(checkTime - refTotalMinutes) > 120) {
+            status = 'NG';
+            break;
+        }
     }
-    return 'OK';
+
+    return { status, time: displayTime };
   };
 
   const canStartCheckin = () => {
-     // Rule: 8 hours after last checkout
      const latestCheckout = getLatestCheckoutTime();
      if (!latestCheckout) return { allowed: true };
-     
      const diffHours = (new Date().getTime() - latestCheckout.getTime()) / (1000 * 60 * 60);
      if (diffHours < 8) {
          return { 
@@ -88,19 +109,17 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
              message: `ต้องรอพักผ่อนให้ครบ 8 ชั่วโมง (อีก ${(8 - diffHours).toFixed(1)} ชม.)` 
          };
      }
-     
      if (todayRecord) {
          if (todayRecord.checkin_status === 'approved' && todayRecord.checkout_status === 'approved') {
              return { allowed: true, message: "เริ่มรอบใหม่ได้" };
          }
          return { allowed: false, message: "คุณทำรายการวันนี้ไปแล้ว" };
      }
-     
      return { allowed: true };
   };
 
   const checkinStatus = canStartCheckin();
-  const fixStartTime = checkFixStartTime();
+  const fixData = checkFixStartTime();
 
   const handleDataUpdate = () => {
       setIsLoading(true);
@@ -111,30 +130,14 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   };
 
   const renderConnectionBadge = () => {
-      if (connectionStatus === 'error') {
-          return (
-              <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                  <i className="fas fa-database"></i> DB Error
-              </div>
-          );
-      }
-      if (connectionStatus === 'offline' || pendingCount > 0) {
-          return (
-              <div className="flex items-center gap-2 bg-amber-400 text-black px-3 py-1 rounded-full text-xs font-bold animate-pulse shadow-sm">
-                  <i className="fas fa-wifi-slash"></i> Offline ({pendingCount})
-              </div>
-          );
-      }
-      return (
-          <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-100 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-bold">
-              <i className="fas fa-wifi"></i> Online
-          </div>
-      );
+      if (connectionStatus === 'error') return <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm"><i className="fas fa-database"></i> DB Error</div>;
+      if (connectionStatus === 'offline' || pendingCount > 0) return <div className="flex items-center gap-2 bg-amber-400 text-black px-3 py-1 rounded-full text-xs font-bold animate-pulse shadow-sm"><i className="fas fa-wifi-slash"></i> Offline ({pendingCount})</div>;
+      return <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-100 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-bold"><i className="fas fa-wifi"></i> Online</div>;
   };
 
   if (view === 'checkin') return <CheckinForm user={user} onBack={() => setView('home')} onSubmitSuccess={handleDataUpdate} />;
   if (view === 'checkout') return <CheckoutForm user={user} record={todayRecord!} onBack={() => setView('home')} onSubmitSuccess={handleDataUpdate} />;
-  if (view === 'history') return <DriverHistory user={user} records={records} onBack={() => setView('home')} fixStartTime={fixStartTime} />;
+  if (view === 'history') return <DriverHistory user={user} records={records} onBack={() => setView('home')} fixStartTime={fixData.status} displayTime={fixData.time} />;
 
   return (
     <div className="h-full bg-slate-50 flex flex-col overflow-hidden">
@@ -144,10 +147,17 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
             <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
               <i className="fas fa-user-circle"></i> {user.name}
             </h1>
-            <div className="flex items-center gap-2 text-sm opacity-80 mt-1">
+            <div className="flex items-center gap-3 text-sm opacity-80 mt-1">
                 <span>รหัส: {user.id}</span>
                 <span className="hidden md:inline">|</span>
-                <Badge type={fixStartTime === 'OK' ? 'approved' : 'danger'}>FixTime: {fixStartTime}</Badge>
+                <div className="flex flex-col items-start gap-1">
+                    <Badge type={fixData.status === 'OK' ? 'approved' : 'danger'}>
+                        Fix Start Time: "{fixData.status}"
+                    </Badge>
+                    <span className="text-[10px] text-white/70">
+                        เวลาอ้างอิงสัปดาห์นี้: {fixData.time}
+                    </span>
+                </div>
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -167,7 +177,6 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
             </div>
         ) : (
             <div className="space-y-4 md:space-y-6">
-                {/* Status Messages */}
                 {todayRecord && todayRecord.checkin_status !== 'approved' && todayRecord.checkin_status !== null && (
                     <Card className="bg-amber-50 border-amber-200 py-3 px-4 shrink-0">
                         <div className="flex items-center gap-3 text-amber-800">
@@ -192,7 +201,6 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                     </Card>
                 )}
 
-                {/* Main Menu Grid - Responsive for Portrait/Landscape Mobile & Tablet */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 auto-rows-fr">
                     <Card 
                         onClick={() => {
