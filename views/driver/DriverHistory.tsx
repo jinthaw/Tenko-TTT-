@@ -117,7 +117,7 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                         </div>
                         <div className={`p-2 rounded ${record.checkout_status ? 'bg-emerald-50' : 'bg-slate-100 opacity-50'}`}>
                             <p className="font-semibold text-emerald-800 mb-1">หลังเลิกงาน</p>
-                            <p>เวลา: {record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'}</p>
+                            <p>เวลา: {record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
                             <p>ผู้ตรวจ: {record.checkout_tenko_name || '-'}</p>
                         </div>
                     </div>
