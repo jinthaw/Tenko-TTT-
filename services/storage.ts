@@ -7,6 +7,15 @@ const SCRIPT_URL_KEY = 'TENKO_SCRIPT_URL';
 
 let lastConnectionStatus: 'online' | 'offline' | 'error' = 'online';
 
+// Utility to get YYYY-MM-DD in local time
+const getLocalISODate = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 const getScriptUrl = () => {
     if (DEFAULT_SCRIPT_URL) return DEFAULT_SCRIPT_URL;
     return localStorage.getItem(SCRIPT_URL_KEY) || '';
@@ -14,7 +23,8 @@ const getScriptUrl = () => {
 
 const getOfflineData = (): TenkoRecord[] => {
     try {
-        return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
+        const data = localStorage.getItem(OFFLINE_KEY);
+        return data ? JSON.parse(data) : [];
     } catch {
         return [];
     }
@@ -34,7 +44,15 @@ const callScript = async (action: string, payload: any = {}) => {
             body: JSON.stringify({ action, ...payload })
         });
         
-        const json = await response.json();
+        const text = await response.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            console.error("Failed to parse server response:", text);
+            throw new Error("Invalid server response format");
+        }
+
         lastConnectionStatus = 'online';
         return json;
     } catch (e) {
@@ -54,42 +72,68 @@ export const StorageService = {
 
   getAll: async (): Promise<TenkoRecord[]> => {
     let dbRecords: TenkoRecord[] = [];
+    const localRecords = getOfflineData();
     
     if (getScriptUrl()) {
         try {
-            dbRecords = await callScript('getAll');
-            if (!Array.isArray(dbRecords)) dbRecords = [];
+            const serverData = await callScript('getAll');
+            if (Array.isArray(serverData)) {
+                dbRecords = serverData;
+                const serverIds = new Set(dbRecords.map(r => r.__backendId));
+                const reconciledLocal = localRecords.filter(lr => {
+                    const existsOnServer = serverIds.has(lr.__backendId);
+                    const isNewPending = lr.checkin_status === 'pending' && !lr.checkin_tenko_id;
+                    return existsOnServer || isNewPending;
+                });
+                saveOfflineData(reconciledLocal);
+            }
         } catch (e) {
             console.warn("Failed to fetch from script", e);
         }
     }
 
-    const offlineRecords = getOfflineData();
+    const currentLocal = getOfflineData();
     const recordMap = new Map<string, TenkoRecord>();
-    
-    // Server data is the source of truth
     dbRecords.forEach(r => recordMap.set(r.__backendId, r));
-    
-    // Local data might have newer updates or pending creates
-    offlineRecords.forEach(r => recordMap.set(r.__backendId, r));
+    currentLocal.forEach(r => recordMap.set(r.__backendId, r));
 
-    // Deduplicate logical duplicates
     const uniqueMap = new Map<string, TenkoRecord>();
     Array.from(recordMap.values()).forEach(r => {
-        const key = `${r.driver_id}_${r.date}`;
+        const driverId = String(r.driver_id).trim();
+        const key = `${driverId}_${r.date}`;
+        
         if (!uniqueMap.has(key)) {
             uniqueMap.set(key, r);
         } else {
             const existing = uniqueMap.get(key)!;
-            let scoreExisting = (existing.checkin_status === 'approved' ? 2 : 0) + (existing.checkout_status === 'approved' ? 2 : 0);
-            let scoreNew = (r.checkin_status === 'approved' ? 2 : 0) + (r.checkout_status === 'approved' ? 2 : 0);
+            
+            // PRIORITY LOGIC: 
+            // 1. Give priority to records that are NOT fully closed (Check-out is still pending or empty)
+            // 2. If both are the same status, pick the one with the latest timestamp
+            
+            const getScore = (rec: TenkoRecord) => {
+                let score = 0;
+                // If check-in is pending, high priority (needs action)
+                if (rec.checkin_status === 'pending') score += 100;
+                // If check-in is approved but check-out is pending, even higher priority (in-queue for exit)
+                if (rec.checkin_status === 'approved' && rec.checkout_status === 'pending') score += 200;
+                // If approved but not checked out yet, high priority (currently working)
+                if (rec.checkin_status === 'approved' && !rec.checkout_status) score += 50;
+                return score;
+            };
 
-            if (scoreNew > scoreExisting) {
+            const existingScore = getScore(existing);
+            const newScore = getScore(r);
+
+            if (newScore > existingScore) {
                 uniqueMap.set(key, r);
-            } else if (scoreNew === scoreExisting) {
-                const timeExisting = new Date(existing.checkin_real_timestamp || existing.date).getTime();
-                const timeNew = new Date(r.checkin_real_timestamp || r.date).getTime();
-                if (timeNew > timeExisting) uniqueMap.set(key, r);
+            } else if (newScore === existingScore) {
+                // If scores are equal, pick the one with the most recent actual interaction
+                const timeExisting = new Date(existing.checkout_real_timestamp || existing.checkin_real_timestamp || existing.date).getTime();
+                const timeNew = new Date(r.checkout_real_timestamp || r.checkin_real_timestamp || r.date).getTime();
+                if (timeNew > timeExisting) {
+                    uniqueMap.set(key, r);
+                }
             }
         }
     });
@@ -101,12 +145,12 @@ export const StorageService = {
 
   create: async (record: Partial<TenkoRecord>): Promise<{ isOk: boolean, data?: TenkoRecord }> => {
     const offline = getOfflineData();
-    const today = record.date || new Date().toISOString().split('T')[0];
+    const today = record.date || getLocalISODate();
     const id = crypto.randomUUID();
     const fullRecord = { 
         ...record, 
         __backendId: id,
-        driver_id: record.driver_id || '',
+        driver_id: String(record.driver_id || '').trim(),
         date: today
     } as TenkoRecord;
 
@@ -138,41 +182,39 @@ export const StorageService = {
   },
 
   delete: async (recordId: string): Promise<{ isOk: boolean }> => {
-    // 1. ลบจาก Local Storage ทันทีเพื่อไม่ให้กลับมาตอน Merge
     const offline = getOfflineData().filter(r => r.__backendId !== recordId);
     saveOfflineData(offline);
-
-    // 2. ส่งคำสั่งลบไปยัง Server (Google Sheet)
     if (getScriptUrl()) {
         try {
             await callScript('delete', { id: recordId });
-            console.log("Deleted from server:", recordId);
         } catch (e) {
-            console.error("Server delete failed, but local is cleared:", e);
+            console.error(e);
         }
     }
-
     return { isOk: true };
   },
 
   syncPendingData: async (): Promise<number> => {
       if (!getScriptUrl()) return 0;
       const offlineRecords = getOfflineData();
-      if (offlineRecords.length === 0) return 0;
-
+      const pendingSync = offlineRecords.filter(r => r.checkin_status === 'pending' || r.checkout_status === 'pending');
+      if (pendingSync.length === 0) return 0;
       let syncedCount = 0;
-      for (const record of offlineRecords) {
+      for (const record of pendingSync) {
           try {
              await callScript('update', { data: record });
              syncedCount++;
           } catch (e) {
-              console.error("Sync failed for", record.__backendId, e);
+              console.error(e);
           }
       }
       return syncedCount;
   },
   
-  getPendingCount: (): number => lastConnectionStatus === 'offline' ? 1 : 0,
+  getPendingCount: (): number => {
+      const offline = getOfflineData();
+      return offline.filter(r => r.checkin_status === 'pending' || r.checkout_status === 'pending').length;
+  },
 
   getUsers: async (): Promise<User[]> => {
     const defaults = [

@@ -22,6 +22,14 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     can_work: record.can_work || 'ได้',
     driving_violation: record.driving_violation || 'ไม่มี',
     
+    // Driver fields (for when Tenko fills them)
+    vehicle_handover: record.vehicle_handover || 'ปกติ',
+    vehicle_detail: record.vehicle_detail || '',
+    body_condition_checkout: record.body_condition_checkout || 'ปกติ',
+    body_detail_checkout: record.body_detail_checkout || '',
+    route_risk: record.route_risk || 'ปกติ',
+    route_detail: record.route_detail || '',
+
     checkin_timestamp: record.checkin_timestamp || new Date().toISOString(),
     checkout_timestamp: record.checkout_timestamp || new Date().toISOString()
   });
@@ -112,6 +120,10 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
       updateData.checkout_status = 'approved';
       updateData.checkout_tenko_id = user.id;
       updateData.checkout_tenko_name = user.name;
+      // Also ensure driver timestamp is set if forced
+      if (!record.checkout_real_timestamp) {
+          updateData.checkout_real_timestamp = new Date().toISOString();
+      }
     }
 
     try {
@@ -203,37 +215,72 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                     <h4 className="font-bold text-purple-800 mb-2 border-b border-purple-200 pb-1 flex items-center gap-2">
                         <i className="fas fa-clipboard-list"></i> รายงานหลังเลิกงาน
                     </h4>
-                    <div className="space-y-3">
-                        <div className="flex flex-col">
-                            <div className="flex justify-between">
-                                <span className="font-semibold text-slate-700">การส่งมอบรถ:</span>
-                                <span className={record.vehicle_handover === 'ปกติ' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                    {record.vehicle_handover || '-'}
-                                </span>
+                    
+                    {/* UI for Tenko to fill missing Driver fields */}
+                    {!record.checkout_real_timestamp && type === 'checkout' ? (
+                        <div className="space-y-4 bg-white p-3 rounded-lg border border-purple-200">
+                            <p className="text-xs text-amber-600 font-bold mb-2"><i className="fas fa-info-circle"></i> พนักงานไม่ได้ส่งข้อมูลมา เจ้าหน้าที่สามารถกรอกแทนได้</p>
+                            
+                            <div>
+                                <label className="block text-xs font-bold mb-1">1. การส่งมอบรถสินค้า</label>
+                                <div className="flex gap-2 mb-2">
+                                    <OptionButton selected={form.vehicle_handover === 'ปกติ'} onClick={() => updateForm('vehicle_handover', 'ปกติ')}>ปกติ</OptionButton>
+                                    <OptionButton selected={form.vehicle_handover === 'ไม่ปกติ'} onClick={() => updateForm('vehicle_handover', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
+                                </div>
+                                {form.vehicle_handover === 'ไม่ปกติ' && <Input placeholder="ระบุรายละเอียด" value={form.vehicle_detail} onChange={e => updateForm('vehicle_detail', e.target.value)} />}
                             </div>
-                            {record.vehicle_detail && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-exclamation-circle text-red-400"></i> {record.vehicle_detail}</div>}
-                        </div>
-                        
-                        <div className="flex flex-col">
-                            <div className="flex justify-between">
-                                <span className="font-semibold text-slate-700">สภาพร่างกาย:</span>
-                                <span className={record.body_condition_checkout === 'ปกติ' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                    {record.body_condition_checkout || '-'}
-                                </span>
-                            </div>
-                            {record.body_detail_checkout && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-exclamation-circle text-red-400"></i> {record.body_detail_checkout}</div>}
-                        </div>
 
-                        <div className="flex flex-col">
-                            <div className="flex justify-between">
-                                <span className="font-semibold text-slate-700">จุดเสี่ยง:</span>
-                                <span className={record.route_risk === 'ปกติ' ? 'text-green-600 font-bold' : 'text-orange-600 font-bold'}>
-                                    {record.route_risk || '-'}
-                                </span>
+                            <div>
+                                <label className="block text-xs font-bold mb-1">2. สภาพร่างกายหลังงาน</label>
+                                <div className="flex gap-2 mb-2">
+                                    <OptionButton selected={form.body_condition_checkout === 'ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ปกติ')}>ปกติ</OptionButton>
+                                    <OptionButton selected={form.body_condition_checkout === 'ไม่ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
+                                </div>
+                                {form.body_condition_checkout === 'ไม่ปกติ' && <Input placeholder="ระบุรายละเอียด" value={form.body_detail_checkout} onChange={e => updateForm('body_detail_checkout', e.target.value)} />}
                             </div>
-                            {record.route_detail && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-map-marker-alt text-orange-400"></i> {record.route_detail}</div>}
+
+                            <div>
+                                <label className="block text-xs font-bold mb-1">3. จุดเสี่ยงในเส้นทาง</label>
+                                <div className="flex gap-2 mb-2">
+                                    <OptionButton selected={form.route_risk === 'ปกติ'} onClick={() => updateForm('route_risk', 'ปกติ')}>ปกติ</OptionButton>
+                                    <OptionButton selected={form.route_risk === 'พบจุดเสี่ยง'} onClick={() => updateForm('route_risk', 'พบจุดเสี่ยง')}>พบจุดเสี่ยง</OptionButton>
+                                </div>
+                                {form.route_risk === 'พบจุดเสี่ยง' && <Input placeholder="ระบุรายละเอียด" value={form.route_detail} onChange={e => updateForm('route_detail', e.target.value)} />}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex flex-col">
+                                <div className="flex justify-between">
+                                    <span className="font-semibold text-slate-700">การส่งมอบรถ:</span>
+                                    <span className={record.vehicle_handover === 'ปกติ' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                                        {record.vehicle_handover || '-'}
+                                    </span>
+                                </div>
+                                {record.vehicle_detail && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-exclamation-circle text-red-400"></i> {record.vehicle_detail}</div>}
+                            </div>
+                            
+                            <div className="flex flex-col">
+                                <div className="flex justify-between">
+                                    <span className="font-semibold text-slate-700">สภาพร่างกาย:</span>
+                                    <span className={record.body_condition_checkout === 'ปกติ' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                                        {record.body_condition_checkout || '-'}
+                                    </span>
+                                </div>
+                                {record.body_detail_checkout && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-exclamation-circle text-red-400"></i> {record.body_detail_checkout}</div>}
+                            </div>
+
+                            <div className="flex flex-col">
+                                <div className="flex justify-between">
+                                    <span className="font-semibold text-slate-700">จุดเสี่ยง:</span>
+                                    <span className={record.route_risk === 'ปกติ' ? 'text-green-600 font-bold' : 'text-orange-600 font-bold'}>
+                                        {record.route_risk || '-'}
+                                    </span>
+                                </div>
+                                {record.route_detail && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-map-marker-alt text-orange-400"></i> {record.route_detail}</div>}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

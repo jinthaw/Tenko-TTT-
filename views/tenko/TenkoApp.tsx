@@ -98,6 +98,9 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
            approvalType = 'checkin';
        } else if (record.checkout_status === 'pending') {
            approvalType = 'checkout';
+       } else if (record.checkin_status === 'approved' && !record.checkout_status) {
+           // ADDED: Allow Tenko to force checkout for working drivers
+           approvalType = 'checkout';
        }
 
        return (

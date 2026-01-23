@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { StorageService } from '../../services/storage';
 import { User, TenkoRecord } from '../../types';
@@ -55,13 +56,21 @@ export const StaffManagement: React.FC = () => {
 
   // --- Cleanup Functions ---
   const handleSearchRecords = async () => {
-      if (!cleanupSearch) return;
+      const query = cleanupSearch.trim();
+      if (!query) return;
+      
       setSearching(true);
       try {
           // Force a fresh fetch from the storage/server
           const allRecords = await StorageService.getAll();
+          
           const matches = allRecords
-            .filter(r => r.driver_id === cleanupSearch || r.driver_name.includes(cleanupSearch))
+            .filter(r => {
+                const rId = String(r.driver_id).toLowerCase().trim();
+                const rName = r.driver_name.toLowerCase();
+                const sQuery = query.toLowerCase();
+                return rId === sQuery || rName.includes(sQuery);
+            })
             .sort((a,b) => {
                 // Priority to pending records
                 if (a.checkin_status === 'pending' && b.checkin_status !== 'pending') return -1;
@@ -70,6 +79,9 @@ export const StaffManagement: React.FC = () => {
             });
           
           setCleanupRecords(matches);
+          if (matches.length === 0) {
+              alert('ไม่พบข้อมูลของพนักงานท่านนี้');
+          }
       } catch (e) {
           alert('เกิดข้อผิดพลาดในการดึงข้อมูล');
       } finally {
@@ -78,13 +90,13 @@ export const StaffManagement: React.FC = () => {
   };
 
   const handleForceDeleteRecord = async (recordId: string) => {
-      if (confirm('ยืนยันลบรายการที่ค้าง?\n(พนักงานจะสามารถส่งข้อมูลใหม่ได้ทันที)')) {
+      if (confirm('ยืนยันลบรายการนี้ถาวร?\n(พนักงานจะสามารถส่งข้อมูลใหม่ได้ทันที และข้อมูลเดิมจะหายไปจากทั้งเครื่องนี้และ Google Sheet)')) {
           setSearching(true);
           try {
               const result = await StorageService.delete(recordId);
               if (result.isOk) {
-                  // Re-search to refresh the list
-                  await handleSearchRecords();
+                  // Update UI immediately by filtering out the deleted record
+                  setCleanupRecords(prev => prev.filter(r => r.__backendId !== recordId));
                   alert('ลบข้อมูลเรียบร้อยแล้ว');
               }
           } catch (e) {
@@ -204,7 +216,7 @@ export const StaffManagement: React.FC = () => {
 
                             <div className="bg-white rounded-xl border border-slate-200 flex-1 overflow-hidden flex flex-col shadow-sm">
                                 <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                    รายการที่พบ (ลำดับความสำคัญ: รายการค้าง)
+                                    รายการที่พบ (เรียงตามลำดับความสำคัญ)
                                 </div>
                                 <div className="overflow-y-auto p-4 space-y-3 flex-1 custom-scrollbar">
                                     {cleanupRecords.length > 0 ? (
