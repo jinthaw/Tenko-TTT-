@@ -20,6 +20,12 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
 
+  // ป้องกันปัญหา Timezone โดยการสร้าง Date จาก string YYYY-MM-DD โดยตรง
+  const parseSafeDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
   const getDayStatus = (day: number) => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const record = myRecords.find(r => r.date === dateStr);
@@ -52,7 +58,7 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <Card className="bg-white border-l-4 border-blue-500">
                  <p className="text-sm text-slate-500">เดือนนี้</p>
-                 <p className="text-3xl font-bold text-blue-600">{myRecords.filter(r => new Date(r.date).getMonth() === currentMonth.getMonth()).length}</p>
+                 <p className="text-3xl font-bold text-blue-600">{myRecords.filter(r => parseSafeDate(r.date).getMonth() === currentMonth.getMonth()).length}</p>
                  <p className="text-xs text-slate-400">รายการ</p>
              </Card>
              <Card className="bg-white border-l-4 border-purple-500">
@@ -100,7 +106,7 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                     <div className="flex justify-between items-start mb-3 border-b pb-2">
                         <div>
                             <p className="font-bold text-slate-800">
-                                {new Date(record.date).toLocaleDateString('th-TH', { dateStyle: 'long' })}
+                                {parseSafeDate(record.date).toLocaleDateString('th-TH', { dateStyle: 'long' })}
                             </p>
                             <p className="text-[10px] text-slate-400">Record ID: {record.__backendId.substring(0, 8)}</p>
                         </div>

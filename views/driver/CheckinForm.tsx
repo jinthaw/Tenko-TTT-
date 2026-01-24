@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, TenkoRecord } from '../../types';
 import { Button, Card, OptionButton, Input } from '../../components/UI';
@@ -24,13 +25,13 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
     vision_problem: 'ไม่มี',
     glasses: 'ไม่มี',
     hearing_problem: 'ไม่มี',
-    hearing_aid: 'ไม่มี'
+    hearing_aid: 'ไม่มี',
+    seen_doctor: 'ไม่มี'
   });
   const [submitting, setSubmitting] = useState(false);
   const [lastCheckout, setLastCheckout] = useState<string | null>(null);
 
   useEffect(() => {
-    // Find last checkout time (Async)
     const loadLastCheckout = async () => {
         const records = await StorageService.getAll();
         const myRecords = records
@@ -44,7 +45,7 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
     loadLastCheckout();
   }, [user.id]);
 
-  const updateForm = (key: keyof TenkoRecord, value: any) => {
+  const updateForm = (key: keyof TenkoRecord | string, value: any) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -73,6 +74,10 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
   const handleSubmit = async () => {
     if (!form.sleep_hours) {
       alert('กรุณากรอกเวลาการนอนหลับ');
+      return;
+    }
+    if (form.medication === 'ทาน' && !form.medication_name) {
+      alert('กรุณาระบุชื่อยาที่มีผลต่อการขับขี่');
       return;
     }
 
@@ -105,8 +110,8 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
 
   const renderQuestion = (
     label: string, 
-    field: keyof TenkoRecord, 
-    detailField?: keyof TenkoRecord, 
+    field: keyof TenkoRecord | string, 
+    detailField?: keyof TenkoRecord | string, 
     triggerValue: string = 'มี',
     choices: string[] = ['มี', 'ไม่มี']
   ) => (
@@ -116,17 +121,17 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
         {choices.map(opt => (
           <OptionButton 
             key={opt}
-            selected={form[field] === opt} 
+            selected={(form as any)[field] === opt} 
             onClick={() => updateForm(field, opt)}
           >
             {opt}
           </OptionButton>
         ))}
       </div>
-      {form[field] === triggerValue && detailField && (
+      {(form as any)[field] === triggerValue && detailField && (
         <Input 
           placeholder="ระบุรายละเอียด" 
-          value={(form[detailField] as string) || ''}
+          value={((form as any)[detailField] as string) || ''}
           onChange={e => updateForm(detailField, e.target.value)}
         />
       )}
@@ -151,27 +156,21 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
         </Card>
 
         {renderSection('อาการทั่วไป', 'fa-heartbeat', (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                 {renderQuestion('1. มีอาการเหนื่อยล้า?', 'tired', 'tired_detail')}
-                <div>
-                    {renderQuestion('2. มีอาการเจ็บป่วย?', 'sick', 'sick_detail', 'มี')}
-                    {form.sick === 'มี' && (
-                        <div className="pl-4 border-l-2 border-slate-200 mt-2 space-y-3">
-                            {renderQuestion('ไปพบแพทย์หรือไม่?', 'seen_doctor', 'seen_doctor_detail', 'มี')}
-                        </div>
-                    )}
+                {renderQuestion('2. มีอาการง่วงนอน?', 'drowsy', 'drowsy_detail')}
+                {renderQuestion('3. มีอาการบาดเจ็บ?', 'injury', 'injury_detail')}
+                {renderQuestion('4. สภาพร่างกาย?', 'body_condition', 'body_condition_detail', 'ไม่ปกติ', ['ปกติ', 'ไม่ปกติ'])}
+                <div className="md:col-span-2 mt-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    {renderQuestion('5. ทานยาที่มีผลต่อการขับขี่?', 'medication', 'medication_name', 'ทาน', ['ทาน', 'ไม่ทาน'])}
                 </div>
-                {renderQuestion('3. มีอาการง่วงนอน?', 'drowsy', 'drowsy_detail')}
-                {renderQuestion('4. มีอาการบาดเจ็บ?', 'injury', 'injury_detail')}
-                {renderQuestion('5. ทานยาที่ส่งผลต่อการขับขี่?', 'medication', 'medication_name', 'ทาน', ['ทาน', 'ไม่ทาน'])}
-                {renderQuestion('6. สภาพร่างกาย?', 'body_condition', 'body_condition_detail', 'ไม่ปกติ', ['ปกติ', 'ไม่ปกติ'])}
             </div>
         ))}
 
         {renderSection('การนอนหลับ', 'fa-bed', (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-8">
                 <div>
-                    <h4 className="font-bold text-slate-700 mb-2">7. การนอนปกติ</h4>
+                    <h4 className="font-bold text-slate-700 mb-2">6. การนอนปกติ</h4>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <Input type="time" label="เริ่มนอน" value={form.sleep_start || ''} onChange={e => handleSleepChange('sleep', 'start', e.target.value)} />
                         <Input type="time" label="ตื่น" value={form.sleep_end || ''} onChange={e => handleSleepChange('sleep', 'end', e.target.value)} />
@@ -186,7 +185,7 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
                 
                 <div>
                     <hr className="md:hidden my-4"/>
-                    <h4 className="font-bold text-slate-700 mb-2">8. การนอนเพิ่ม</h4>
+                    <h4 className="font-bold text-slate-700 mb-2">7. การนอนเพิ่ม</h4>
                     {renderQuestion('มีการนอนเพิ่มหรือไม่?', 'extra_sleep', undefined, 'นอนเพิ่ม', ['นอนเพิ่ม', 'ไม่นอนเพิ่ม'])}
                     
                     {form.extra_sleep === 'นอนเพิ่ม' && (
@@ -204,6 +203,31 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
                             {renderQuestion('คุณภาพการนอนเพิ่ม', 'extra_sleep_quality', 'extra_sleep_quality_detail', 'ไม่สนิท', ['หลับสนิท', 'ไม่สนิท'])}
                         </div>
                     )}
+                </div>
+            </div>
+        ))}
+
+        {renderSection('อาการป่วย', 'fa-medkit', (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-8">
+                <div className={form.sick === 'มี' ? 'p-3 bg-red-50/50 rounded-lg border border-red-100' : ''}>
+                    {renderQuestion('8. ชื่อโรค (ระบุหากมีอาการป่วย)', 'sick', 'sick_detail', 'มี')}
+                </div>
+                
+                <div>
+                    {renderQuestion('9. พบหมอ (ได้ไปพบแพทย์หรือไม่?)', 'seen_doctor')}
+                </div>
+
+                <div className="flex flex-col mb-4">
+                    <label className="block text-slate-700 font-medium mb-2">10. ชื่อยา (ระบุยาที่แพทย์สั่ง)</label>
+                    <Input 
+                        placeholder="เช่น ยาแก้ไอ, ยาแก้แพ้"
+                        value={form.seen_doctor_detail || ''}
+                        onChange={e => updateForm('seen_doctor_detail', e.target.value)}
+                    />
+                </div>
+
+                <div>
+                    {renderQuestion('11. ทานยา (ทานยาตามที่แพทย์สั่งหรือไม่?)', 'sick_taking_med', undefined, 'ทาน', ['ทาน', 'ไม่ทาน'])}
                 </div>
             </div>
         ))}

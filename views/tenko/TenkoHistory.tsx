@@ -18,6 +18,12 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
     return records.filter(r => r.checkin_status === 'approved' && r.checkout_status === 'approved');
   }, [records]);
 
+  // ป้องกันปัญหา Timezone โดยการสร้าง Date จาก string YYYY-MM-DD โดยตรง
+  const parseSafeDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
   const filtered = useMemo(() => {
       return completed.filter(r => {
           const matchName = r.driver_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -60,7 +66,10 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
                         <Badge type="approved">Completed</Badge>
                     </div>
                     <div className="text-sm space-y-2 text-slate-600">
-                        <p className="flex items-center gap-2"><i className="fas fa-calendar w-4"></i> {new Date(record.date).toLocaleDateString('th-TH')}</p>
+                        <p className="flex items-center gap-2">
+                          <i className="fas fa-calendar w-4"></i> 
+                          {parseSafeDate(record.date).toLocaleDateString('th-TH', { dateStyle: 'long' })}
+                        </p>
                         <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded">
                             <div>
                                 <p className="font-bold text-blue-600">เข้างาน</p>

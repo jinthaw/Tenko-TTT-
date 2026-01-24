@@ -19,6 +19,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'error'>('online');
+  const [now, setNow] = useState(new Date());
 
   const fetchData = async () => {
       try {
@@ -38,12 +39,16 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
+    const clockInterval = setInterval(() => setNow(new Date()), 60000); // Update every minute for the rest timer
+    return () => {
+        clearInterval(interval);
+        clearInterval(clockInterval);
+    };
   }, []);
 
   const getTodayStr = () => {
-      const now = new Date();
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
   const today = getTodayStr();
@@ -52,15 +57,38 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
   const activeRecord = myRecords[0]; 
+  
+  // Check if we have a current session in progress
   const isCurrentSession = activeRecord && (
       activeRecord.date === today || 
-      (!activeRecord.checkout_status && (new Date().getTime() - new Date(activeRecord.checkin_real_timestamp || activeRecord.date).getTime()) < 24 * 60 * 60 * 1000)
+      (!activeRecord.checkout_status && (now.getTime() - new Date(activeRecord.checkin_real_timestamp || activeRecord.date).getTime()) < 24 * 60 * 60 * 1000)
   );
 
   const currentRecord = isCurrentSession ? activeRecord : null;
 
+  // Find the last completed record to calculate rest time
+  const lastFinishedRecord = myRecords.find(r => r.checkin_status === 'approved' && r.checkout_status === 'approved');
+  
+  const getRestInfo = () => {
+      if (!lastFinishedRecord || !lastFinishedRecord.checkout_timestamp) return null;
+      const checkoutTime = new Date(lastFinishedRecord.checkout_timestamp);
+      const restUntil = new Date(checkoutTime.getTime() + 8 * 60 * 60 * 1000);
+      const isResting = now < restUntil;
+      
+      return {
+          checkoutTime,
+          restUntil,
+          isResting,
+          restUntilStr: restUntil.toLocaleString('th-TH', { 
+              day: '2-digit', month: '2-digit', year: '2-digit', 
+              hour: '2-digit', minute: '2-digit' 
+          }) + ' น.'
+      };
+  };
+
+  const restInfo = getRestInfo();
+
   const checkFixStartTime = () => {
-    // Look for all records of the week (including pending/current) to find the baseline
     const getMonday = (dateStr: string) => {
         const d = new Date(dateStr);
         const day = d.getDay();
@@ -72,7 +100,6 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
     const thisWeekMonday = getMonday(today);
     const thisWeekRecords = myRecords.filter(r => getMonday(r.date) === thisWeekMonday);
     
-    // Reference is the earliest approved record, OR if none, the earliest record of the week
     const approvedThisWeek = thisWeekRecords
         .filter(r => r.checkin_status === 'approved')
         .sort((a, b) => new Date(a.checkin_timestamp!).getTime() - new Date(b.checkin_timestamp!).getTime());
@@ -87,12 +114,10 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
     const refDate = new Date(refTimeSource!);
     const displayTime = refDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
     
-    // If we only have 1 record this week, it's the "Baseline" (Reference)
     if (thisWeekRecords.length === 1 && (!currentRecord || currentRecord.checkin_status !== 'approved')) {
         return { status: 'Ref', time: displayTime };
     }
 
-    // Comparison logic
     if (currentRecord && currentRecord.checkin_timestamp) {
         const refTotalMinutes = refDate.getHours() * 60 + refDate.getMinutes();
         const checkDate = new Date(currentRecord.checkin_timestamp);
@@ -105,7 +130,13 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
 
   const canStartCheckin = () => {
      if (currentRecord) {
-         if (currentRecord.checkin_status === 'approved' && currentRecord.checkout_status === 'approved') return { allowed: true };
+         if (currentRecord.checkin_status === 'approved' && currentRecord.checkout_status === 'approved') {
+             // If resting, allow but warn
+             if (restInfo?.isResting) {
+                 return { allowed: true, warning: `คุณยังพักผ่อนไม่ครบ 8 ชม. (ครบเวลา ${restInfo.restUntilStr}) ต้องการเข้างานเลยใช่หรือไม่?` };
+             }
+             return { allowed: true };
+         }
          return { allowed: false, message: "คุณมีรายการที่ยังทำไม่จบ" };
      }
      return { allowed: true };
@@ -120,6 +151,18 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
           setView('home');
           setIsLoading(false);
       });
+  };
+
+  const handleCheckinClick = () => {
+      const status = canStartCheckin();
+      if (!status.allowed) {
+          alert(status.message);
+          return;
+      }
+      if (status.warning) {
+          if (!confirm(status.warning)) return;
+      }
+      setView('checkin');
   };
 
   if (view === 'checkin') return <CheckinForm user={user} onBack={() => setView('home')} onSubmitSuccess={handleDataUpdate} />;
@@ -152,6 +195,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
 
       <main className="max-w-4xl mx-auto p-4 md:p-6 w-full flex-1 overflow-y-auto">
         <div className="space-y-4 md:space-y-6">
+            {/* Status: Pending Approval */}
             {currentRecord && currentRecord.checkin_status === 'pending' && (
                 <Card className="bg-amber-50 border-amber-500 py-4 px-6 border-l-4 shadow-sm animate-pulse">
                     <div className="flex items-center gap-4 text-amber-800">
@@ -164,6 +208,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                 </Card>
             )}
 
+            {/* Status: Active Working */}
             {currentRecord && currentRecord.checkin_status === 'approved' && !currentRecord.checkout_status && (
                 <Card className="bg-emerald-50 border-emerald-600 py-5 px-6 border-l-4 shadow-md">
                     <div className="flex items-center gap-4 text-emerald-900">
@@ -184,21 +229,70 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                 </Card>
             )}
 
+            {/* Status: Resting (Persistent Alert) */}
+            {restInfo?.isResting && (!currentRecord || currentRecord.checkout_status === 'approved') && (
+                <Card className="bg-indigo-50 border-indigo-600 py-5 px-6 border-l-4 shadow-md border-r border-t border-b animate-slide-up">
+                    <div className="flex items-center gap-4 text-indigo-900">
+                        <div className="bg-indigo-600 text-white w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-lg shrink-0">
+                            <i className="fas fa-bed"></i>
+                        </div>
+                        <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                                <h3 className="font-black text-lg">พักผ่อนมากกว่า 8 ชม. เพื่อความปลอดภัย</h3>
+                                <Badge type="neutral">RESTING</Badge>
+                            </div>
+                            <p className="text-sm font-bold text-indigo-800 mt-1">กรุณาพักผ่อนให้เพียงพอก่อนเริ่มงานครั้งถัดไป</p>
+                            <div className="mt-3 inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-bold text-indigo-700 shadow-sm">
+                                <i className="fas fa-clock text-indigo-500"></i> เริ่มงานครั้งถัดไปได้เวลา: {restInfo.restUntilStr}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Card onClick={() => checkinStatus.allowed ? setView('checkin') : alert(checkinStatus.message)} className={`flex flex-col items-center justify-center p-6 hover:border-blue-400 transition-all ${!checkinStatus.allowed ? 'opacity-50 grayscale' : 'border-blue-100'}`}>
-                    <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3 text-2xl"><i className="fas fa-clipboard-check"></i></div>
+                <Card 
+                    onClick={handleCheckinClick} 
+                    className={`flex flex-col items-center justify-center p-6 transition-all group relative ${
+                        !checkinStatus.allowed ? 'opacity-50 grayscale bg-slate-100' : 
+                        restInfo?.isResting ? 'border-amber-400 bg-amber-50/30' : 'border-blue-100 hover:border-blue-400'
+                    }`}
+                >
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 text-2xl transition-transform group-hover:scale-110 ${
+                        !checkinStatus.allowed ? 'bg-slate-200 text-slate-400' : 
+                        restInfo?.isResting ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                    }`}>
+                        <i className="fas fa-clipboard-check"></i>
+                    </div>
                     <h3 className="font-bold text-slate-800">ก่อนเริ่มงาน</h3>
-                    {!checkinStatus.allowed && <p className="text-red-500 text-[10px] mt-1 font-bold">{checkinStatus.message}</p>}
+                    {!checkinStatus.allowed ? (
+                        <p className="text-red-500 text-[10px] mt-1 font-bold">{checkinStatus.message}</p>
+                    ) : restInfo?.isResting ? (
+                        <p className="text-amber-600 text-[10px] mt-1 font-bold text-center">ยังพักไม่ครบ 8 ชม.</p>
+                    ) : (
+                        <p className="text-slate-400 text-[10px] mt-1 font-bold">พร้อมตรวจสอบ</p>
+                    )}
                 </Card>
 
-                <Card onClick={() => (currentRecord?.checkin_status === 'approved' && !currentRecord.checkout_status) ? setView('checkout') : alert('ยังไม่สามารถเลิกงานได้')} className={`flex flex-col items-center justify-center p-6 hover:border-emerald-400 transition-all ${(!currentRecord || currentRecord.checkin_status !== 'approved' || currentRecord.checkout_status) ? 'opacity-50 grayscale' : 'border-emerald-100'}`}>
-                    <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3 text-2xl"><i className="fas fa-flag-checkered"></i></div>
+                <Card 
+                    onClick={() => (currentRecord?.checkin_status === 'approved' && !currentRecord.checkout_status) ? setView('checkout') : alert('ยังไม่สามารถเลิกงานได้')} 
+                    className={`flex flex-col items-center justify-center p-6 transition-all group ${(!currentRecord || currentRecord.checkin_status !== 'approved' || currentRecord.checkout_status) ? 'opacity-50 grayscale' : 'border-emerald-100 hover:border-emerald-400'}`}
+                >
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 text-2xl transition-transform group-hover:scale-110 ${(!currentRecord || currentRecord.checkin_status !== 'approved' || currentRecord.checkout_status) ? 'bg-slate-200 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
+                        <i className="fas fa-flag-checkered"></i>
+                    </div>
                     <h3 className="font-bold text-slate-800">หลังเลิกงาน</h3>
+                    {currentRecord?.checkin_status === 'approved' && !currentRecord.checkout_status && (
+                        <p className="text-emerald-600 text-[10px] mt-1 font-bold">กำลังปฏิบัติงาน</p>
+                    )}
                 </Card>
 
-                <Card onClick={() => setView('history')} className="flex flex-col items-center justify-center p-6 hover:border-purple-400 border-purple-50 transition-all">
-                    <div className="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 text-2xl"><i className="fas fa-history"></i></div>
+                <Card onClick={() => setView('history')} className="flex flex-col items-center justify-center p-6 hover:border-purple-400 border-purple-50 transition-all group">
+                    <div className="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 text-2xl transition-transform group-hover:scale-110">
+                        <i className="fas fa-history"></i>
+                    </div>
                     <h3 className="font-bold text-slate-800">รายงานของฉัน</h3>
+                    <p className="text-slate-400 text-[10px] mt-1 font-bold">ดูประวัติย้อนหลัง</p>
                 </Card>
             </div>
 
@@ -219,7 +313,9 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
       </main>
       <style>{`
         .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </div>
   );
