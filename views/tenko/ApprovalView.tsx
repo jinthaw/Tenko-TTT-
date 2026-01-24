@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { TenkoRecord, User } from '../../types';
 import { Button, Card, Input, OptionButton, Badge } from '../../components/UI';
@@ -10,6 +11,16 @@ interface Props {
   onBack: () => void;
   onSuccess: () => void;
 }
+
+const InfoRow = ({ label, value, detail, alert }: { label: string, value?: string, detail?: string, alert?: boolean }) => (
+    <div className={`flex flex-col mb-2 pb-2 border-b border-slate-50 last:border-0 ${alert ? 'bg-red-50 p-1.5 rounded' : ''}`}>
+        <div className="flex justify-between text-sm items-start gap-2">
+            <span className="font-semibold text-slate-600 shrink-0">{label}:</span>
+            <span className={`font-bold text-right break-words ${alert ? 'text-red-600' : 'text-slate-800'}`}>{value || '-'}</span>
+        </div>
+        {detail && <div className="text-xs bg-white/50 p-1.5 rounded mt-1 border border-slate-100 text-slate-600 italic"><i className="fas fa-info-circle text-slate-400"></i> {detail}</div>}
+    </div>
+);
 
 export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSuccess }) => {
   const [form, setForm] = useState<Partial<TenkoRecord>>({
@@ -110,19 +121,27 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     if (form.can_work === 'ไม่ได้' && !form.cannot_work_reason) return alert('กรุณาระบุสาเหตุที่วิ่งงานไม่ได้');
 
     setSubmitting(true);
+    
+    // Copy all form data to updateData
     const updateData: Partial<TenkoRecord> = { ...form };
 
     if (type === 'checkin') {
       updateData.checkin_status = 'approved';
       updateData.checkin_tenko_id = user.id;
       updateData.checkin_tenko_name = user.name;
+      // Prevent saving checkout timestamp during initial checkin approval
+      delete updateData.checkout_timestamp;
+      delete updateData.alcohol_checkout;
+      
     } else if (type === 'checkout') {
       updateData.checkout_status = 'approved';
       updateData.checkout_tenko_id = user.id;
       updateData.checkout_tenko_name = user.name;
-      // Also ensure driver timestamp is set if forced
+      
+      // If forcing checkout (driver didn't send data), use the selected time as the driver's time too
+      // This allows "Back-dating" or manual time entry by Tenko
       if (!record.checkout_real_timestamp) {
-          updateData.checkout_real_timestamp = new Date().toISOString();
+          updateData.checkout_real_timestamp = form.checkout_timestamp;
       }
     }
 
@@ -140,8 +159,12 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
       if(confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?\n\nการลบจะทำให้ข้อมูลหายไป และพนักงานขับรถสามารถส่งรายการเข้ามาใหม่ได้')) {
           setSubmitting(true);
           try {
-              await StorageService.delete(record.__backendId);
-              onSuccess();
+              const res = await StorageService.delete(record.__backendId);
+              if (res.isOk) {
+                  onSuccess();
+              } else {
+                  alert('ไม่สามารถลบข้อมูลที่ Server ได้ (อาจเกิดจากปัญหาการเชื่อมต่อ)\nกรุณาลองใหม่อีกครั้ง');
+              }
           } catch (e) {
               alert('ล้มเหลวในการลบข้อมูล');
           } finally {
@@ -168,61 +191,92 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
   };
 
   const renderDriverDataSection = () => (
-    <Card className="h-fit">
-        <h3 className="font-bold text-slate-800 mb-4 border-b pb-2 flex justify-between">
-            <span><i className="fas fa-user-circle"></i> ข้อมูลพนักงาน</span>
-            <span className="text-sm font-normal text-slate-500">{record.driver_name} ({record.driver_id})</span>
+    <Card className="h-fit overflow-y-auto max-h-[85vh]">
+        <h3 className="font-bold text-slate-800 mb-4 border-b pb-2 flex justify-between items-center sticky top-0 bg-white z-10">
+            <span className="flex items-center gap-2"><i className="fas fa-user-circle text-blue-600"></i> ข้อมูลพนักงาน</span>
+            <div className="text-right">
+                <div className="text-sm font-bold">{record.driver_name}</div>
+                <div className="text-xs text-slate-400">ID: {record.driver_id}</div>
+            </div>
         </h3>
         
-        <div className="space-y-4 text-sm pr-2">
-            <div className="bg-slate-50 p-3 rounded border space-y-2">
-                <p><strong>เลิกงานล่าสุด:</strong> {lastCheckout}</p>
-                <p><strong>Fix Start Time:</strong> <Badge type={fixStartStatus.includes('OK') ? 'approved' : 'danger'}>{fixStartStatus}</Badge></p>
-                
-                <div className="border-t border-slate-200 pt-2 mt-2">
-                    <p className="flex justify-between items-center">
-                        <span className="font-bold text-blue-700">เข้างาน:</span>
-                        <span>{record.checkin_timestamp ? new Date(record.checkin_timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</span>
-                    </p>
-                    {(type === 'checkout' || type === 'view') && (
-                        <p className="flex justify-between items-center mt-1">
-                            <span className="font-bold text-purple-700">เลิกงาน:</span>
-                            <span>{record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</span>
-                        </p>
-                    )}
+        <div className="space-y-4 text-sm pr-1">
+            {/* Context Info */}
+            <div className="bg-slate-100 p-3 rounded-lg border border-slate-200 space-y-2">
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-600 font-medium">เวลาเลิกงานล่าสุด:</span>
+                    <span className="font-bold text-slate-800 bg-white px-2 py-0.5 rounded border shadow-sm">{lastCheckout}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-600 font-medium">Fix Start Time:</span>
+                    <Badge type={fixStartStatus.includes('OK') || fixStartStatus.includes('First') ? 'approved' : 'danger'}>{fixStartStatus}</Badge>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-                <p><strong>เหนื่อยล้า:</strong> {record.tired} {record.tired_detail && `(${record.tired_detail})`}</p>
-                <p><strong>เจ็บป่วย:</strong> {record.sick} {record.sick === 'มี' && `(หาหมอ: ${record.seen_doctor})`}</p>
-                <p><strong>ง่วงนอน:</strong> {record.drowsy}</p>
-                <p><strong>บาดเจ็บ:</strong> {record.injury}</p>
-                <p><strong>ยา:</strong> {record.medication} {record.medication_name}</p>
-                <p><strong>สายตา/การได้ยิน:</strong> {record.vision_problem}/{record.hearing_problem}</p>
+            {/* 1. Health & Condition (Pre-work) */}
+            <div className="border rounded-lg p-3 relative pt-4 mt-2">
+                <div className="absolute -top-3 left-2 bg-white px-2 text-xs font-bold text-slate-500 border rounded-full">1. สุขภาพ & ร่างกาย (ก่อนงาน)</div>
+                <div className="grid grid-cols-2 gap-x-4 mt-1">
+                    <InfoRow label="เหนื่อยล้า" value={record.tired} detail={record.tired_detail} alert={record.tired === 'มี'} />
+                    <InfoRow label="เจ็บป่วย" value={record.sick} detail={record.sick === 'มี' ? `(หาหมอ: ${record.seen_doctor}) ${record.sick_detail || ''}` : ''} alert={record.sick === 'มี'} />
+                    <InfoRow label="ง่วงนอน" value={record.drowsy} detail={record.drowsy_detail} alert={record.drowsy === 'มี'} />
+                    <InfoRow label="บาดเจ็บ" value={record.injury} detail={record.injury_detail} alert={record.injury === 'มี'} />
+                    <InfoRow label="ทานยา" value={record.medication} detail={record.medication_name} alert={record.medication === 'ทาน'} />
+                    <InfoRow label="สภาพร่างกาย" value={record.body_condition} detail={record.body_condition_detail} alert={record.body_condition === 'ไม่ปกติ'} />
+                </div>
             </div>
 
-            <div className="p-3 bg-blue-50 rounded border border-blue-100">
-                <h4 className="font-bold mb-1">การนอน</h4>
-                <p>ปกติ: {record.sleep_start} - {record.sleep_end} ({record.sleep_hours} ชม.) - <span className={record.sleep_hours! < 6 ? 'text-red-600 font-bold' : 'text-green-600'}>{record.sleep_quality}</span></p>
-                {record.extra_sleep === 'นอนเพิ่ม' && (
-                    <p>เพิ่ม: {record.extra_sleep_start} - {record.extra_sleep_end} ({record.extra_sleep_hours} ชม.) - <span className={record.extra_sleep_hours! < 4.5 ? 'text-red-600 font-bold' : 'text-green-600'}>{record.extra_sleep_quality}</span></p>
-                )}
+            {/* 2. Sleep */}
+            <div className="border rounded-lg p-3 relative bg-blue-50/30 border-blue-100 pt-4 mt-3">
+                <div className="absolute -top-3 left-2 bg-white px-2 text-xs font-bold text-blue-500 border border-blue-100 rounded-full">2. การพักผ่อน</div>
+                <div className="space-y-2 mt-1">
+                     <div className="flex justify-between items-center">
+                        <span className="text-slate-600 font-medium">นอนปกติ:</span>
+                        <span className="font-bold">{record.sleep_start} - {record.sleep_end}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                        <span className="text-slate-600 font-medium">รวมชั่วโมง:</span>
+                        <span className={`font-bold ${(record.sleep_hours || 0) < 6 ? 'text-red-600' : 'text-green-600'}`}>{record.sleep_hours} ชม. ({record.sleep_quality})</span>
+                     </div>
+                     {record.extra_sleep === 'นอนเพิ่ม' && (
+                         <div className="mt-2 pt-2 border-t border-blue-100">
+                             <div className="flex justify-between items-center text-xs">
+                                <span className="text-slate-500">นอนเพิ่ม:</span>
+                                <span className="font-bold text-slate-700">{record.extra_sleep_start} - {record.extra_sleep_end}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-xs">
+                                <span className="text-slate-500">รวมเพิ่ม:</span>
+                                <span className={`font-bold ${(record.extra_sleep_hours || 0) < 4.5 ? 'text-red-500' : 'text-green-600'}`}>{record.extra_sleep_hours} ชม. ({record.extra_sleep_quality})</span>
+                             </div>
+                         </div>
+                     )}
+                </div>
             </div>
 
-            {(type === 'checkout' || type === 'view') && (
-                <div className="p-3 bg-purple-50 rounded border border-purple-100 mt-2">
-                    <h4 className="font-bold text-purple-800 mb-2 border-b border-purple-200 pb-1 flex items-center gap-2">
-                        <i className="fas fa-clipboard-list"></i> รายงานหลังเลิกงาน
-                    </h4>
+            {/* 3. Environment & Senses */}
+            <div className="border rounded-lg p-3 relative pt-4 mt-3">
+                <div className="absolute -top-3 left-2 bg-white px-2 text-xs font-bold text-slate-500 border rounded-full">3. สภาพแวดล้อม & ประสาทสัมผัส</div>
+                <div className="grid grid-cols-2 gap-x-4 mt-1">
+                    <InfoRow label="เรื่องกังวล" value={record.worry_detail} detail={record.worry_text} alert={record.worry_detail === 'มี'} />
+                    <InfoRow label="สถานที่พัก" value={record.rest_location} detail={record.rest_location_detail} />
+                    <InfoRow label="สายตา" value={record.vision_problem} detail={record.vision_detail} alert={record.vision_problem === 'มี'} />
+                    <InfoRow label="แว่นตา" value={record.glasses} detail={record.glasses_detail} />
+                    <InfoRow label="การได้ยิน" value={record.hearing_problem} detail={record.hearing_detail} alert={record.hearing_problem === 'มี'} />
+                    <InfoRow label="เครื่องช่วย" value={record.hearing_aid} detail={record.hearing_aid_detail} />
+                </div>
+            </div>
+
+            {/* 4. Post-work (Only if relevant) */}
+            {(type === 'checkout' || type === 'view' || record.checkout_status) && (
+                 <div className="border rounded-lg p-3 relative bg-purple-50/30 border-purple-100 mt-4 pt-4">
+                    <div className="absolute -top-3 left-2 bg-white px-2 text-xs font-bold text-purple-600 border border-purple-100 rounded-full">4. รายงานหลังเลิกงาน</div>
                     
-                    {/* UI for Tenko to fill missing Driver fields */}
                     {!record.checkout_real_timestamp && type === 'checkout' ? (
-                        <div className="space-y-4 bg-white p-3 rounded-lg border border-purple-200">
-                            <p className="text-xs text-amber-600 font-bold mb-2"><i className="fas fa-info-circle"></i> พนักงานไม่ได้ส่งข้อมูลมา เจ้าหน้าที่สามารถกรอกแทนได้</p>
+                        <div className="space-y-4 bg-white p-3 rounded-lg border border-purple-200 mt-2">
+                            <p className="text-xs text-amber-600 font-bold mb-2 flex items-center gap-1"><i className="fas fa-info-circle"></i> พนักงานไม่ได้ส่งข้อมูลมา เจ้าหน้าที่สามารถกรอกแทนได้</p>
                             
                             <div>
-                                <label className="block text-xs font-bold mb-1">1. การส่งมอบรถสินค้า</label>
+                                <label className="block text-xs font-bold mb-1">4.1 การส่งมอบรถสินค้า</label>
                                 <div className="flex gap-2 mb-2">
                                     <OptionButton selected={form.vehicle_handover === 'ปกติ'} onClick={() => updateForm('vehicle_handover', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.vehicle_handover === 'ไม่ปกติ'} onClick={() => updateForm('vehicle_handover', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
@@ -231,7 +285,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold mb-1">2. สภาพร่างกายหลังงาน</label>
+                                <label className="block text-xs font-bold mb-1">4.2 สภาพร่างกายหลังงาน</label>
                                 <div className="flex gap-2 mb-2">
                                     <OptionButton selected={form.body_condition_checkout === 'ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.body_condition_checkout === 'ไม่ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
@@ -240,7 +294,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold mb-1">3. จุดเสี่ยงในเส้นทาง</label>
+                                <label className="block text-xs font-bold mb-1">4.3 จุดเสี่ยงในเส้นทาง</label>
                                 <div className="flex gap-2 mb-2">
                                     <OptionButton selected={form.route_risk === 'ปกติ'} onClick={() => updateForm('route_risk', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.route_risk === 'พบจุดเสี่ยง'} onClick={() => updateForm('route_risk', 'พบจุดเสี่ยง')}>พบจุดเสี่ยง</OptionButton>
@@ -249,36 +303,10 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            <div className="flex flex-col">
-                                <div className="flex justify-between">
-                                    <span className="font-semibold text-slate-700">การส่งมอบรถ:</span>
-                                    <span className={record.vehicle_handover === 'ปกติ' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                        {record.vehicle_handover || '-'}
-                                    </span>
-                                </div>
-                                {record.vehicle_detail && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-exclamation-circle text-red-400"></i> {record.vehicle_detail}</div>}
-                            </div>
-                            
-                            <div className="flex flex-col">
-                                <div className="flex justify-between">
-                                    <span className="font-semibold text-slate-700">สภาพร่างกาย:</span>
-                                    <span className={record.body_condition_checkout === 'ปกติ' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                        {record.body_condition_checkout || '-'}
-                                    </span>
-                                </div>
-                                {record.body_detail_checkout && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-exclamation-circle text-red-400"></i> {record.body_detail_checkout}</div>}
-                            </div>
-
-                            <div className="flex flex-col">
-                                <div className="flex justify-between">
-                                    <span className="font-semibold text-slate-700">จุดเสี่ยง:</span>
-                                    <span className={record.route_risk === 'ปกติ' ? 'text-green-600 font-bold' : 'text-orange-600 font-bold'}>
-                                        {record.route_risk || '-'}
-                                    </span>
-                                </div>
-                                {record.route_detail && <div className="text-slate-600 text-xs mt-1 bg-white p-2 rounded border border-purple-100"><i className="fas fa-map-marker-alt text-orange-400"></i> {record.route_detail}</div>}
-                            </div>
+                        <div className="space-y-3 mt-1">
+                             <InfoRow label="ส่งมอบรถ" value={record.vehicle_handover} detail={record.vehicle_detail} alert={record.vehicle_handover === 'ไม่ปกติ'} />
+                             <InfoRow label="ร่างกาย(หลัง)" value={record.body_condition_checkout} detail={record.body_detail_checkout} alert={record.body_condition_checkout === 'ไม่ปกติ'} />
+                             <InfoRow label="จุดเสี่ยง" value={record.route_risk} detail={record.route_detail} alert={record.route_risk === 'พบจุดเสี่ยง'} />
                         </div>
                     )}
                 </div>
@@ -397,16 +425,32 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             </div>
         )}
 
-        <div className="bg-yellow-50 p-3 rounded border border-yellow-200 mt-4">
-            <label className="block text-sm font-bold mb-1 text-yellow-800">
-                <i className="fas fa-clock"></i> เวลาที่บันทึก
-            </label>
-            <input 
-                type="datetime-local" 
-                className="w-full p-2 border rounded bg-white text-sm"
-                value={formatDateForInput(type === 'checkout' ? form.checkout_timestamp : form.checkin_timestamp)}
-                onChange={e => handleDateChange(e.target.value, type === 'checkout' ? 'checkout_timestamp' : 'checkin_timestamp')}
-            />
+        <div className="bg-yellow-50 p-3 rounded border border-yellow-200 mt-4 space-y-3">
+            <div>
+                <label className="block text-sm font-bold mb-1 text-yellow-800">
+                    <i className="fas fa-clock"></i> เวลาเข้างาน (Check-in)
+                </label>
+                <input 
+                    type="datetime-local" 
+                    className="w-full p-2 border rounded bg-white text-sm"
+                    value={formatDateForInput(form.checkin_timestamp)}
+                    onChange={e => handleDateChange(e.target.value, 'checkin_timestamp')}
+                />
+            </div>
+
+            {(type === 'checkout' || type === 'view' || record.checkout_status) && (
+                 <div className="pt-2 border-t border-yellow-200">
+                    <label className="block text-sm font-bold mb-1 text-yellow-800">
+                        <i className="fas fa-clock"></i> เวลาเลิกงาน (Check-out)
+                    </label>
+                    <input 
+                        type="datetime-local" 
+                        className="w-full p-2 border rounded bg-white text-sm"
+                        value={formatDateForInput(form.checkout_timestamp)}
+                        onChange={e => handleDateChange(e.target.value, 'checkout_timestamp')}
+                    />
+                </div>
+            )}
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
@@ -430,7 +474,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
         <Button variant="secondary" onClick={onBack}>ย้อนกลับ</Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {renderDriverDataSection()}
         {renderTenkoInputSection()}
       </div>

@@ -5,7 +5,7 @@ import { Card, Badge, Button } from '../../components/UI';
 interface Props {
   records: TenkoRecord[];
   onSelectRecord: (id: string) => void;
-  onDelete: () => void;
+  onDelete: (id: string) => void;
 }
 
 export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelete }) => {
@@ -20,7 +20,7 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {completed.map(record => (
-                <Card key={record.__backendId} className="hover:shadow-md transition-all cursor-pointer border border-slate-200" onClick={() => onSelectRecord(record.__backendId)}>
+                <Card key={record.__backendId} className="hover:shadow-md transition-all cursor-pointer border border-slate-200 relative group" onClick={() => onSelectRecord(record.__backendId)}>
                     <div className="flex justify-between items-start mb-2">
                         <h4 className="font-bold text-slate-800 text-lg">{record.driver_name}</h4>
                         <Badge type="approved">Completed</Badge>
@@ -40,6 +40,14 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
                             </div>
                         </div>
                     </div>
+                    
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDelete(record.__backendId); }}
+                        className="opacity-0 group-hover:opacity-100 absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                        title="ลบรายการ"
+                    >
+                        <i className="fas fa-trash-alt"></i>
+                    </button>
                 </Card>
             ))}
         </div>

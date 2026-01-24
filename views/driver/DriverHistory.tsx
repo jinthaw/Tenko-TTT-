@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { User, TenkoRecord } from '../../types';
 import { Button, Card, Badge } from '../../components/UI';
@@ -36,7 +37,7 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
   };
 
   return (
-    <div className="h-full bg-slate-50 overflow-y-auto">
+    <div className="h-full bg-slate-50 overflow-y-auto pb-10">
       <div className="bg-purple-600 text-white px-6 py-6 shadow-md">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
             <div>
@@ -59,12 +60,13 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                  <p className="text-3xl font-bold text-purple-600">{myRecords.length}</p>
                  <p className="text-xs text-slate-400">รายการ</p>
              </Card>
-             <Card className={`bg-white border-l-4 ${fixStartTime === 'OK' ? 'border-emerald-500' : 'border-red-500'}`}>
+             <Card className={`bg-white border-l-4 ${fixStartTime === 'NG' ? 'border-red-500' : 'border-emerald-500'}`}>
                  <p className="text-sm text-slate-500">Fix Start Time สัปดาห์นี้</p>
-                 <p className={`text-3xl font-bold ${fixStartTime === 'OK' ? 'text-emerald-600' : 'text-red-600'}`}>"{fixStartTime}"</p>
+                 <p className={`text-3xl font-bold ${fixStartTime === 'NG' ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {fixStartTime === 'Ref' ? 'Baseline' : `"${fixStartTime}"`}
+                 </p>
                  <div className="flex justify-between items-center mt-1">
-                    <p className="text-xs text-slate-400">{fixStartTime === 'OK' ? 'ปกติ' : 'ผิดปกติ'}</p>
-                    <p className="text-[10px] font-bold text-slate-500">Ref: {displayTime}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Ref Time: {displayTime}</p>
                  </div>
              </Card>
         </div>
@@ -89,36 +91,42 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
                     );
                 })}
             </div>
-            <div className="flex gap-4 mt-3 text-xs justify-center text-slate-500">
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-100 rounded"></div> เสร็จสิ้น</div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 rounded"></div> ทำงานอยู่</div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-50 rounded"></div> รอตรวจ</div>
-            </div>
         </Card>
 
         <div className="space-y-4">
-            <h3 className="font-bold text-slate-700">รายการล่าสุด</h3>
+            <h3 className="font-bold text-slate-700">รายการล่าสุด (10 รายการ)</h3>
             {myRecords.slice(0, 10).map(record => (
-                <Card key={record.__backendId} className="hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between items-start mb-3">
+                <Card key={record.__backendId} className="hover:bg-slate-50 transition-colors border border-slate-100">
+                    <div className="flex justify-between items-start mb-3 border-b pb-2">
                         <div>
                             <p className="font-bold text-slate-800">
                                 {new Date(record.date).toLocaleDateString('th-TH', { dateStyle: 'long' })}
                             </p>
-                            <p className="text-xs text-slate-500">ID: {record.__backendId.substring(0, 8)}</p>
+                            <p className="text-[10px] text-slate-400">Record ID: {record.__backendId.substring(0, 8)}</p>
                         </div>
                         {getStatusBadge(record)}
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="p-2 bg-blue-50 rounded">
-                            <p className="font-semibold text-blue-800 mb-1">ก่อนเริ่มงาน</p>
-                            <p>เวลา: {record.checkin_timestamp ? new Date(record.checkin_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'}</p>
-                            <p>ผู้ตรวจ: {record.checkin_tenko_name || '-'}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                            <p className="font-bold text-blue-800 text-xs mb-1 uppercase tracking-wider">ก่อนเริ่มงาน (Check-in)</p>
+                            <div className="space-y-1">
+                                <p className="flex justify-between"><span>เวลาอนุมัติ:</span> <span className="font-bold">{record.checkin_timestamp ? new Date(record.checkin_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'} น.</span></p>
+                                <p className="flex justify-between"><span>ผู้ตรวจ:</span> <span className="text-slate-600">{record.checkin_tenko_name || '-'}</span></p>
+                            </div>
                         </div>
-                        <div className={`p-2 rounded ${record.checkout_status ? 'bg-emerald-50' : 'bg-slate-100 opacity-50'}`}>
-                            <p className="font-semibold text-emerald-800 mb-1">หลังเลิกงาน</p>
-                            <p>เวลา: {record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
-                            <p>ผู้ตรวจ: {record.checkout_tenko_name || '-'}</p>
+                        <div className={`p-3 rounded-lg border ${record.checkout_status === 'approved' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                            <p className="font-bold text-emerald-800 text-xs mb-1 uppercase tracking-wider">หลังเลิกงาน (Check-out)</p>
+                            <div className="space-y-1">
+                                <p className="flex justify-between items-center">
+                                    <span>วัน/เวลาเลิกงาน:</span> 
+                                    <span className="font-bold text-right">
+                                        {record.checkout_timestamp 
+                                            ? new Date(record.checkout_timestamp).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) 
+                                            : '-'}
+                                    </span>
+                                </p>
+                                <p className="flex justify-between"><span>ผู้ตรวจ:</span> <span className="text-slate-600">{record.checkout_tenko_name || '-'}</span></p>
+                            </div>
                         </div>
                     </div>
                 </Card>

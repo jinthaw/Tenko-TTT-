@@ -182,15 +182,22 @@ export const StorageService = {
   },
 
   delete: async (recordId: string): Promise<{ isOk: boolean }> => {
-    const offline = getOfflineData().filter(r => r.__backendId !== recordId);
-    saveOfflineData(offline);
+    // 1. Try deleting from server FIRST
     if (getScriptUrl()) {
         try {
             await callScript('delete', { id: recordId });
         } catch (e) {
-            console.error(e);
+            console.error("Server delete failed", e);
+            // If server delete fails, DO NOT delete locally to maintain consistency
+            // and allow the user to retry.
+            return { isOk: false };
         }
     }
+    
+    // 2. If server success (or no server), delete local
+    const offline = getOfflineData().filter(r => r.__backendId !== recordId);
+    saveOfflineData(offline);
+    
     return { isOk: true };
   },
 
