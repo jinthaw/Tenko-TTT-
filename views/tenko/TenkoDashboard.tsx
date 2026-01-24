@@ -59,10 +59,28 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
     return { status: result, time: displayTime };
   };
 
-  const { pendingCheckin, activeDrivers, pendingCheckout, completed, ngRecordsToday } = useMemo(() => {
+  const { pendingCheckin, activeDrivers, pendingCheckout, completed, ngRecordsToday, dayShiftCount, nightShiftCount } = useMemo(() => {
     const baseRecords = records;
     const todayRecords = records.filter(r => r.date === today);
     const ngToday = todayRecords.filter(r => getFixStartInfo(r).status === 'NG');
+
+    let dayCount = 0;
+    let nightCount = 0;
+
+    todayRecords.forEach(r => {
+        const timeStr = r.checkin_timestamp || r.checkin_real_timestamp;
+        if (timeStr) {
+            const date = new Date(timeStr);
+            const minutes = date.getHours() * 60 + date.getMinutes();
+            // Day: 00:01 (1 min) to 12:00 (720 mins)
+            if (minutes > 0 && minutes <= 720) {
+                dayCount++;
+            } else {
+                // Night: 12:01 (721 mins) to 00:00 (0 mins)
+                nightCount++;
+            }
+        }
+    });
 
     let filtered = baseRecords;
     if (filterMode === 'ng') {
@@ -74,7 +92,9 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
         activeDrivers: filtered.filter(r => r.checkin_status === 'approved' && !r.checkout_status),
         pendingCheckout: filtered.filter(r => r.checkout_status === 'pending'),
         completed: baseRecords.filter(r => r.checkin_status === 'approved' && r.checkout_status === 'approved'),
-        ngRecordsToday: ngToday
+        ngRecordsToday: ngToday,
+        dayShiftCount: dayCount,
+        nightShiftCount: nightCount
     };
   }, [records, filterMode, today]);
 
@@ -152,9 +172,22 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
         <div className="text-3xl font-bold">{stats.totalNGCount} <span className="text-xs font-normal opacity-70">ครั้ง</span></div>
         <p className="text-[10px] mt-1 text-white/60">พนักงาน {stats.uniqueNGDrivers} ท่าน (เดือนนี้)</p>
       </Card>
-      <Card className="bg-white border-l-4 border-blue-500">
-        <h3 className="text-slate-500 mb-1 text-sm">รายการวันนี้</h3>
-        <div className="text-3xl font-bold text-slate-800">{records.filter(r => r.date === today).length}</div>
+      <Card className="bg-white border-l-4 border-blue-500 flex flex-col justify-between">
+        <div>
+            <h3 className="text-slate-500 mb-1 text-sm">รายการวันนี้</h3>
+            <div className="text-3xl font-bold text-slate-800">{records.filter(r => r.date === today).length}</div>
+        </div>
+        <div className="flex gap-2 mt-2 pt-2 border-t border-slate-50">
+            <div className="flex-1 text-center">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Day</p>
+                <p className="text-sm font-bold text-blue-600">{dayShiftCount}</p>
+            </div>
+            <div className="w-[1px] bg-slate-100"></div>
+            <div className="flex-1 text-center">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Night</p>
+                <p className="text-sm font-bold text-indigo-800">{nightShiftCount}</p>
+            </div>
+        </div>
       </Card>
     </div>
   );
@@ -210,7 +243,7 @@ export const TenkoDashboard: React.FC<Props> = ({ view, records, onSelectRecord,
       <div className="pb-10 animate-fade-in">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h1 className="text-2xl font-bold flex items-center gap-3 text-slate-800">
-                <i className="fas fa-tachometer-alt text-blue-600"></i> แผงควบคุมเจ้าหน้าที่
+                <i className="fas fa-tachometer-alt text-blue-600"></i> ภาพรวมระบบ Tenko บริษัท ออโต้แครี่เออร์
             </h1>
             
             <div className="flex bg-slate-200 p-1 rounded-lg shadow-inner w-full sm:w-auto">

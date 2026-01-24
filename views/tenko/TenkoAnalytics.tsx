@@ -7,9 +7,10 @@ import * as XLSX from 'xlsx';
 
 interface Props {
   records: TenkoRecord[];
+  onSelectRecord: (id: string) => void;
 }
 
-export const TenkoAnalytics: React.FC<Props> = ({ records }) => {
+export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today);
   const [selectedDriverId, setSelectedDriverId] = useState<string>(''); // Filter state
@@ -302,7 +303,7 @@ export const TenkoAnalytics: React.FC<Props> = ({ records }) => {
                                     const diff = Math.abs(targetMins - refMins);
 
                                     return (
-                                        <tr key={r.__backendId} className="hover:bg-red-50/30">
+                                        <tr key={r.__backendId} className="hover:bg-red-50/30 cursor-pointer" onClick={() => onSelectRecord(r.__backendId)}>
                                             <td className="p-3 font-medium">{new Date(r.date).toLocaleDateString('th-TH')}</td>
                                             <td className="p-3 font-bold">{r.driver_name} ({r.driver_id})</td>
                                             <td className="p-3 text-red-600 font-bold">{new Date(r.checkin_timestamp!).toLocaleTimeString('th-TH', {hour: '2-digit', minute: '2-digit'})}</td>
@@ -387,7 +388,7 @@ export const TenkoAnalytics: React.FC<Props> = ({ records }) => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {monthRecords.map(r => (
-                            <tr key={r.__backendId} className="hover:bg-slate-50 transition-colors">
+                            <tr key={r.__backendId} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onSelectRecord(r.__backendId)}>
                                 <td className="p-3 font-medium text-slate-700">{new Date(r.date).toLocaleDateString('th-TH')}</td>
                                 <td className="p-3">
                                     <div className="font-bold text-slate-700">{r.driver_name}</div>

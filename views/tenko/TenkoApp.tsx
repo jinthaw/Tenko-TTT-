@@ -121,7 +121,7 @@ export const TenkoApp: React.FC<Props> = ({ user, onLogout }) => {
 
     switch (currentView) {
         case 'manage': return <StaffManagement />;
-        case 'analytics': return <TenkoAnalytics records={records} />;
+        case 'analytics': return <TenkoAnalytics records={records} onSelectRecord={setSelectedRecordId} />;
         case 'report': return <TenkoReportPrint records={records} />;
         case 'completed': return <TenkoHistory records={records} onSelectRecord={setSelectedRecordId} onDelete={handleDeleteRecord} />;
         case 'queue-checkin': return <TenkoDashboard view="queue-checkin" records={records} onSelectRecord={setSelectedRecordId} onDelete={handleDeleteRecord} />;
