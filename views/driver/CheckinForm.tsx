@@ -26,7 +26,8 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
     glasses: 'ไม่มี',
     hearing_problem: 'ไม่มี',
     hearing_aid: 'ไม่มี',
-    seen_doctor: 'ไม่มี'
+    seen_doctor: 'ไม่มี',
+    sick_taking_med: 'ไม่ทาน'
   });
   const [submitting, setSubmitting] = useState(false);
   const [lastCheckout, setLastCheckout] = useState<string | null>(null);

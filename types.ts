@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   name: string;
@@ -21,6 +22,7 @@ export interface TenkoRecord {
   sick_detail?: string; // Specify disease name
   seen_doctor?: 'มี' | 'ไม่มี';
   seen_doctor_detail?: string;
+  sick_taking_med?: 'ทาน' | 'ไม่ทาน';
 
   // --- 3. Drowsy ---
   drowsy?: 'มี' | 'ไม่มี';
