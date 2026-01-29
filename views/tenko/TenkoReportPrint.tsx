@@ -105,7 +105,7 @@ export const TenkoReportPrint: React.FC<Props> = ({ records }) => {
         {record ? (
             <div 
                 id="print-section"
-                className="bg-white shadow-lg print:shadow-none mx-auto relative box-border"
+                className="bg-white shadow-lg print:shadow-none mx-auto relative box-border flex flex-col"
                 style={{ width: '210mm', minHeight: '297mm', padding: '15mm 15mm' }}
             >
                 {/* Header */}
@@ -126,7 +126,7 @@ export const TenkoReportPrint: React.FC<Props> = ({ records }) => {
                     <div><span className="font-bold">รหัส:</span> {record.driver_id}</div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 h-full">
+                <div className="grid grid-cols-2 gap-6 flex-1">
                     {/* LEFT COLUMN: Check-in */}
                     <div className="flex flex-col gap-4">
                         {/* 1. Driver Self Check */}
@@ -260,7 +260,7 @@ export const TenkoReportPrint: React.FC<Props> = ({ records }) => {
                 </div>
 
                 {/* Signature Section */}
-                <div className="mt-6 border-t-2 border-slate-800 pt-6 flex justify-around">
+                <div className="mt-6 border-t-2 border-slate-800 pt-6 flex justify-around shrink-0 pb-6">
                     <div className="text-center w-1/3">
                         <div className="h-16 border-b border-slate-400 mb-2"></div>
                         <p className="font-bold">{record.driver_name}</p>
