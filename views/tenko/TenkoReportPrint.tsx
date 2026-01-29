@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { TenkoRecord, User } from '../../types';
 import { StorageService } from '../../services/storage';
@@ -292,35 +293,37 @@ export const TenkoReportPrint: React.FC<Props> = ({ records }) => {
                 size: A4; 
                 margin: 0; 
             }
-            html, body {
-                height: 100%;
+            html, body, #root, main, .overflow-hidden, .overflow-y-auto {
+                height: auto !important;
+                width: 100% !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+                background-color: white !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                overflow: visible !important;
-                background: white;
+                position: static !important;
             }
             
-            /* Hide all direct children of body to reset the layout context */
             body * {
                 visibility: hidden;
             }
 
-            /* Show only the print section and its descendants */
             #print-section, #print-section * {
                 visibility: visible;
             }
 
-            /* Position the print section absolute top-left to overlay everything */
             #print-section {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                margin: 0;
-                padding: 15mm; /* Restore padding for printer */
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 210mm !important;
+                height: 297mm !important;
+                margin: 0 !important;
+                padding: 15mm !important;
+                background: white;
+                z-index: 9999;
             }
             
-            /* Hide custom scrollbars */
             ::-webkit-scrollbar {
                 display: none;
             }
