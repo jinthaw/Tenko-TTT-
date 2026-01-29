@@ -83,7 +83,7 @@ export const CheckoutForm: React.FC<Props> = ({ record, onBack, onSubmitSuccess 
 
         <Card>
             <h3 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                <i className="fas fa-route text-orange-500"></i> จุดเสี่ยงระหว่างเส้นทาง
+                <i className="fas fa-route text-orange-500"></i> จุดเสี่ยงระหว่างเส้นทางและมาตรฐานSOP
             </h3>
             <div className="flex gap-3 mb-3">
                 <OptionButton selected={form.route_risk === 'ปกติ'} onClick={() => updateForm('route_risk', 'ปกติ')}>ปกติ</OptionButton>

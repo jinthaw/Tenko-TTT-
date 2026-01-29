@@ -220,7 +220,7 @@ export const TenkoReportPrint: React.FC<Props> = ({ records }) => {
                             </div>
 
                             <div className="border-t border-slate-300 pt-2">
-                                <p className="font-bold text-sm mb-1">จุดเสี่ยงในเส้นทาง</p>
+                                <p className="font-bold text-sm mb-1">จุดเสี่ยงในเส้นทางและมาตรฐานSOP</p>
                                 <CheckBox checked={record.route_risk === 'ปกติ'} label="ไม่พบจุดเสี่ยงเพิ่มเติม" />
                                 <CheckBox checked={record.route_risk === 'พบจุดเสี่ยง'} label="พบจุดเสี่ยง" detail={record.route_detail} />
                             </div>

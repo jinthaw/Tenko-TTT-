@@ -294,7 +294,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold mb-1">4.3 จุดเสี่ยงในเส้นทาง</label>
+                                <label className="block text-xs font-bold mb-1">4.3 จุดเสี่ยงในเส้นทางและมาตรฐานSOP</label>
                                 <div className="flex gap-2 mb-2">
                                     <OptionButton selected={form.route_risk === 'ปกติ'} onClick={() => updateForm('route_risk', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.route_risk === 'พบจุดเสี่ยง'} onClick={() => updateForm('route_risk', 'พบจุดเสี่ยง')}>พบจุดเสี่ยง</OptionButton>
@@ -306,7 +306,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                         <div className="space-y-3 mt-1">
                              <InfoRow label="ส่งมอบรถ" value={record.vehicle_handover} detail={record.vehicle_detail} alert={record.vehicle_handover === 'ไม่ปกติ'} />
                              <InfoRow label="ร่างกาย(หลัง)" value={record.body_condition_checkout} detail={record.body_detail_checkout} alert={record.body_condition_checkout === 'ไม่ปกติ'} />
-                             <InfoRow label="จุดเสี่ยง" value={record.route_risk} detail={record.route_detail} alert={record.route_risk === 'พบจุดเสี่ยง'} />
+                             <InfoRow label="จุดเสี่ยงและมาตรฐานSOP" value={record.route_risk} detail={record.route_detail} alert={record.route_risk === 'พบจุดเสี่ยง'} />
                         </div>
                     )}
                 </div>

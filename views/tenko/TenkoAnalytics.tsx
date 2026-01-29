@@ -136,7 +136,7 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
             "ผลประเมิน": formatDetail(r.can_work, r.cannot_work_reason),
             "การส่งมอบรถ": formatDetail(r.vehicle_handover, r.vehicle_detail),
             "สภาพร่างกาย(หลัง)": formatDetail(r.body_condition_checkout, r.body_detail_checkout),
-            "จุดเสี่ยง": formatDetail(r.route_risk, r.route_detail),
+            "จุดเสี่ยงและมาตรฐานSOP": formatDetail(r.route_risk, r.route_detail),
             "เวลาเลิกงาน (อนุมัติ)": r.checkout_timestamp ? new Date(r.checkout_timestamp).toLocaleTimeString('th-TH') : '-',
             "ผู้ตรวจ (เลิกงาน)": r.checkout_tenko_name || '-',
             "แอลกอฮอล์ (ออก)": r.alcohol_checkout || 0,
