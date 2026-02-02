@@ -87,7 +87,8 @@ export const CheckinForm: React.FC<Props> = ({ user, onBack, onSubmitSuccess }) 
         await StorageService.create({
             driver_id: user.id,
             driver_name: user.name,
-            date: new Date().toISOString().split('T')[0],
+            // Date is omitted here to let StorageService use getLocalISODate()
+            // which prevents UTC date shift issues for late night/early morning
             checkin_real_timestamp: new Date().toISOString(),
             checkin_status: 'pending',
             checkout_status: null,

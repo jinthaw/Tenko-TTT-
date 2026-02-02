@@ -28,9 +28,27 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
       return completed.filter(r => {
           const matchName = r.driver_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            r.driver_id.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchMonth = selectedMonth ? r.date.startsWith(selectedMonth) : true;
+          
+          // Use checkin_timestamp (Check-in Approval Date) for filtering
+          // This ensures records are grouped by when they STARTED work/were approved to work
+          let filterDate = r.date; 
+          if (r.checkin_timestamp) {
+              // Convert ISO timestamp to YYYY-MM-DD for comparison
+              const d = new Date(r.checkin_timestamp);
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              filterDate = `${y}-${m}-${day}`;
+          }
+
+          const matchMonth = selectedMonth ? filterDate.startsWith(selectedMonth) : true;
           return matchName && matchMonth;
-      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      }).sort((a, b) => {
+          // Sort by Check-in Approval Date
+          const timeA = a.checkin_timestamp ? new Date(a.checkin_timestamp).getTime() : new Date(a.date).getTime();
+          const timeB = b.checkin_timestamp ? new Date(b.checkin_timestamp).getTime() : new Date(b.date).getTime();
+          return timeB - timeA;
+      });
   }, [completed, searchTerm, selectedMonth]);
 
   return (
@@ -59,26 +77,30 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(record => (
+            {filtered.map(record => {
+                // Determine display date based on checkin_timestamp (Approval Date)
+                const displayDate = record.checkin_timestamp ? new Date(record.checkin_timestamp) : parseSafeDate(record.date);
+                
+                return (
                 <Card key={record.__backendId} className="hover:shadow-md transition-all cursor-pointer border border-slate-200 relative group" onClick={() => onSelectRecord(record.__backendId)}>
                     <div className="flex justify-between items-start mb-2">
                         <h4 className="font-bold text-slate-800 text-lg">{record.driver_name}</h4>
                         <Badge type="approved">Completed</Badge>
                     </div>
                     <div className="text-sm space-y-2 text-slate-600">
-                        <p className="flex items-center gap-2">
-                          <i className="fas fa-calendar w-4"></i> 
-                          {parseSafeDate(record.date).toLocaleDateString('th-TH', { dateStyle: 'long' })}
+                        <p className="flex items-center gap-2 font-semibold text-blue-900 bg-blue-50 p-1.5 rounded-lg border border-blue-100">
+                          <i className="fas fa-calendar-check w-4 text-blue-600"></i> 
+                          {displayDate.toLocaleDateString('th-TH', { dateStyle: 'long' })}
                         </p>
                         <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded">
                             <div>
                                 <p className="font-bold text-blue-600">เข้างาน</p>
-                                <p>{new Date(record.checkin_timestamp!).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                                <p>{record.checkin_timestamp ? new Date(record.checkin_timestamp).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
                                 <p className="truncate">โดย: {record.checkin_tenko_name}</p>
                             </div>
                             <div>
-                                <p className="font-bold text-orange-600">เลิกงาน</p>
-                                <p>{new Date(record.checkout_timestamp!).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                                <p className="font-bold text-orange-600">เลิกงาน (อนุมัติ)</p>
+                                <p>{record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
                                 <p className="truncate">โดย: {record.checkout_tenko_name}</p>
                             </div>
                         </div>
@@ -92,7 +114,7 @@ export const TenkoHistory: React.FC<Props> = ({ records, onSelectRecord, onDelet
                         <i className="fas fa-trash-alt"></i>
                     </button>
                 </Card>
-            ))}
+            )})}
         </div>
 
         {filtered.length === 0 && (

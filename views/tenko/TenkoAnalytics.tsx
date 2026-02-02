@@ -23,6 +23,18 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
     });
   }, []);
 
+  // --- Date Helper: Use Check-in Approval Date if available ---
+  const getRecordDateStr = (r: TenkoRecord) => {
+      if (r.checkin_timestamp) {
+          const d = new Date(r.checkin_timestamp);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+      }
+      return r.date;
+  };
+
   // --- NG Logic Helpers ---
   const getMonday = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -73,11 +85,18 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
 
   const monthRecords = useMemo(() => {
     return filteredRecords.filter(r => {
-        const parts = r.date.split('-');
+        // Use Approval Date for filtering month
+        const rDate = getRecordDateStr(r);
+        const parts = rDate.split('-');
         if (parts.length !== 3) return false;
         const rYear = parseInt(parts[0]);
         const rMonth = parseInt(parts[1]) - 1;
         return rMonth === currentMonth.getMonth() && rYear === currentMonth.getFullYear();
+    }).sort((a, b) => {
+        // Sort by approval time
+        const timeA = a.checkin_timestamp ? new Date(a.checkin_timestamp).getTime() : new Date(a.date).getTime();
+        const timeB = b.checkin_timestamp ? new Date(b.checkin_timestamp).getTime() : new Date(b.date).getTime();
+        return timeB - timeA;
     });
   }, [filteredRecords, currentMonth]);
 
@@ -89,7 +108,11 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
   const graphData = useMemo(() => {
     const sorted = [...monthRecords]
         .filter(r => r.blood_pressure_high && r.blood_pressure_low)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        .sort((a, b) => {
+            const timeA = a.checkin_timestamp ? new Date(a.checkin_timestamp).getTime() : new Date(a.date).getTime();
+            const timeB = b.checkin_timestamp ? new Date(b.checkin_timestamp).getTime() : new Date(b.date).getTime();
+            return timeA - timeB;
+        });
     return sorted.slice(-5);
   }, [monthRecords]);
 
@@ -109,9 +132,12 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
         const extraSleepInfo = r.extra_sleep === 'นอนเพิ่ม'
             ? `${r.extra_sleep_hours} ชม. (${r.extra_sleep_start || '-'} - ${r.extra_sleep_end || '-'}) ${r.extra_sleep_quality || ''}`
             : 'ไม่นอนเพิ่ม';
+        
+        // Use approved date for export
+        const dateStr = r.checkin_timestamp ? r.checkin_timestamp.split('T')[0] : r.date;
 
         return {
-            "วันที่": r.date,
+            "วันที่": dateStr,
             "ชื่อพนักงาน": r.driver_name,
             "รหัสพนักงาน": r.driver_id,
             "ความเหนื่อยล้า": formatDetail(r.tired, r.tired_detail),
@@ -160,7 +186,8 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
     const m = String(currentMonth.getMonth() + 1).padStart(2, '0');
     const d = String(day).padStart(2, '0');
     const target = `${y}-${m}-${d}`;
-    return filteredRecords.filter(r => r.date === target).length;
+    // Use getRecordDateStr to compare against the calendar cell
+    return filteredRecords.filter(r => getRecordDateStr(r) === target).length;
   };
 
   // --- SVG Graph Render ---
@@ -194,13 +221,17 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
                 ))}
                 <polyline points={pointsHigh} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 <polyline points={pointsLow} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                {graphData.map((d, i) => (
-                    <g key={i}>
-                        <circle cx={getX(i)} cy={getY(d.blood_pressure_high!)} r="5" fill="#fff" stroke="#ef4444" strokeWidth="2.5" />
-                        <circle cx={getX(i)} cy={getY(d.blood_pressure_low!)} r="5" fill="#fff" stroke="#3b82f6" strokeWidth="2.5" />
-                        <text x={getX(i)} y={svgHeight - 10} fontSize="12" fill="#64748b" textAnchor="middle">{new Date(d.date).toLocaleDateString('th-TH', {day: 'numeric', month: 'short'})}</text>
-                    </g>
-                ))}
+                {graphData.map((d, i) => {
+                    // Display approval date in graph axis
+                    const displayDate = d.checkin_timestamp ? new Date(d.checkin_timestamp) : new Date(d.date);
+                    return (
+                        <g key={i}>
+                            <circle cx={getX(i)} cy={getY(d.blood_pressure_high!)} r="5" fill="#fff" stroke="#ef4444" strokeWidth="2.5" />
+                            <circle cx={getX(i)} cy={getY(d.blood_pressure_low!)} r="5" fill="#fff" stroke="#3b82f6" strokeWidth="2.5" />
+                            <text x={getX(i)} y={svgHeight - 10} fontSize="12" fill="#64748b" textAnchor="middle">{displayDate.toLocaleDateString('th-TH', {day: 'numeric', month: 'short'})}</text>
+                        </g>
+                    );
+                })}
             </svg>
         </div>
     );
@@ -302,9 +333,12 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
                                     const refMins = parseInt(refParts[0]) * 60 + parseInt(refParts[1]);
                                     const diff = Math.abs(targetMins - refMins);
 
+                                    // Display Approval Date
+                                    const displayDate = r.checkin_timestamp ? new Date(r.checkin_timestamp) : new Date(r.date);
+
                                     return (
                                         <tr key={r.__backendId} className="hover:bg-red-50/30 cursor-pointer" onClick={() => onSelectRecord(r.__backendId)}>
-                                            <td className="p-3 font-medium">{new Date(r.date).toLocaleDateString('th-TH')}</td>
+                                            <td className="p-3 font-medium">{displayDate.toLocaleDateString('th-TH')}</td>
                                             <td className="p-3 font-bold">{r.driver_name} ({r.driver_id})</td>
                                             <td className="p-3 text-red-600 font-bold">{new Date(r.checkin_timestamp!).toLocaleTimeString('th-TH', {hour: '2-digit', minute: '2-digit'})}</td>
                                             <td className="p-3 text-slate-500">{info.refTime}</td>
@@ -377,7 +411,7 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-100 text-slate-600 font-semibold uppercase">
                         <tr>
-                            <th className="p-3">วันที่</th>
+                            <th className="p-3">วันที่ (อนุมัติ)</th>
                             <th className="p-3">พนักงาน</th>
                             <th className="p-3 text-center">เวลาเข้า</th>
                             <th className="p-3 text-center">BP (บน/ล่าง)</th>
@@ -387,30 +421,34 @@ export const TenkoAnalytics: React.FC<Props> = ({ records, onSelectRecord }) => 
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {monthRecords.map(r => (
-                            <tr key={r.__backendId} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onSelectRecord(r.__backendId)}>
-                                <td className="p-3 font-medium text-slate-700">{new Date(r.date).toLocaleDateString('th-TH')}</td>
-                                <td className="p-3">
-                                    <div className="font-bold text-slate-700">{r.driver_name}</div>
-                                    <div className="text-xs text-slate-400">{r.driver_id}</div>
-                                </td>
-                                <td className="p-3 text-center text-slate-600">
-                                    {r.checkin_timestamp ? new Date(r.checkin_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'}
-                                </td>
-                                <td className="p-3 text-center">
-                                    <span className={`font-bold ${r.blood_pressure_high! > 140 ? 'text-red-600' : 'text-slate-700'}`}>
-                                        {r.blood_pressure_high}
-                                    </span> / {r.blood_pressure_low}
-                                </td>
-                                <td className="p-3 text-center">{r.temperature}</td>
-                                <td className="p-3 text-center text-emerald-600 font-bold">{r.alcohol_checkin}</td>
-                                <td className="p-3 text-right">
-                                    <Badge type={r.checkin_status === 'approved' ? 'approved' : 'pending'}>
-                                        {r.checkin_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจ'}
-                                    </Badge>
-                                </td>
-                            </tr>
-                        ))}
+                        {monthRecords.map(r => {
+                            // Display Approval Date in table
+                            const displayDate = r.checkin_timestamp ? new Date(r.checkin_timestamp) : new Date(r.date);
+                            return (
+                                <tr key={r.__backendId} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onSelectRecord(r.__backendId)}>
+                                    <td className="p-3 font-medium text-slate-700">{displayDate.toLocaleDateString('th-TH')}</td>
+                                    <td className="p-3">
+                                        <div className="font-bold text-slate-700">{r.driver_name}</div>
+                                        <div className="text-xs text-slate-400">{r.driver_id}</div>
+                                    </td>
+                                    <td className="p-3 text-center text-slate-600">
+                                        {r.checkin_timestamp ? new Date(r.checkin_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'}
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        <span className={`font-bold ${r.blood_pressure_high! > 140 ? 'text-red-600' : 'text-slate-700'}`}>
+                                            {r.blood_pressure_high}
+                                        </span> / {r.blood_pressure_low}
+                                    </td>
+                                    <td className="p-3 text-center">{r.temperature}</td>
+                                    <td className="p-3 text-center text-emerald-600 font-bold">{r.alcohol_checkin}</td>
+                                    <td className="p-3 text-right">
+                                        <Badge type={r.checkin_status === 'approved' ? 'approved' : 'pending'}>
+                                            {r.checkin_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจ'}
+                                        </Badge>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

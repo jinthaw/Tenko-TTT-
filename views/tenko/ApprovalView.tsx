@@ -122,34 +122,37 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
 
     setSubmitting(true);
     
-    // Copy all form data to updateData
-    const updateData: Partial<TenkoRecord> = { ...form };
-
-    if (type === 'checkin') {
-      updateData.checkin_status = 'approved';
-      updateData.checkin_tenko_id = user.id;
-      updateData.checkin_tenko_name = user.name;
-      // Prevent saving checkout timestamp during initial checkin approval
-      delete updateData.checkout_timestamp;
-      delete updateData.alcohol_checkout;
-      
-    } else if (type === 'checkout') {
-      updateData.checkout_status = 'approved';
-      updateData.checkout_tenko_id = user.id;
-      updateData.checkout_tenko_name = user.name;
-      
-      // If forcing checkout (driver didn't send data), use the selected time as the driver's time too
-      // This allows "Back-dating" or manual time entry by Tenko
-      if (!record.checkout_real_timestamp) {
-          updateData.checkout_real_timestamp = form.checkout_timestamp;
-      }
-    }
-
     try {
-        await StorageService.update({ ...record, ...updateData });
+        // Construct the update object carefully to avoid overwriting with unwanted defaults
+        let finalRecord: TenkoRecord = { ...record, ...form } as TenkoRecord;
+
+        if (type === 'checkin') {
+            finalRecord.checkin_status = 'approved';
+            finalRecord.checkin_tenko_id = user.id;
+            finalRecord.checkin_tenko_name = user.name;
+            
+            // CRITICAL: Remove checkout fields if they came from form state defaults
+            // We use the record's existing checkout data if available (likely null for new checkin)
+            finalRecord.checkout_timestamp = record.checkout_timestamp;
+            finalRecord.alcohol_checkout = record.alcohol_checkout;
+            finalRecord.checkout_status = record.checkout_status;
+
+        } else if (type === 'checkout') {
+            finalRecord.checkout_status = 'approved';
+            finalRecord.checkout_tenko_id = user.id;
+            finalRecord.checkout_tenko_name = user.name;
+            
+            // If forcing checkout (driver didn't send data), use the form time as real timestamp
+            if (!record.checkout_real_timestamp) {
+                finalRecord.checkout_real_timestamp = form.checkout_timestamp;
+            }
+        }
+
+        await StorageService.update(finalRecord);
         onSuccess();
     } catch(e) {
-        alert('เกิดข้อผิดพลาด');
+        console.error(e);
+        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + e);
     } finally {
         setSubmitting(false);
     }
@@ -281,7 +284,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                                     <OptionButton selected={form.vehicle_handover === 'ปกติ'} onClick={() => updateForm('vehicle_handover', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.vehicle_handover === 'ไม่ปกติ'} onClick={() => updateForm('vehicle_handover', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
                                 </div>
-                                {form.vehicle_handover === 'ไม่ปกติ' && <Input placeholder="ระบุรายละเอียด" value={form.vehicle_detail} onChange={e => updateForm('vehicle_detail', e.target.value)} />}
+                                {form.vehicle_handover === 'ไม่ปกติ' && <Input placeholder="ระบุรายละเอียดความผิดปกติ" value={form.vehicle_detail} onChange={e => updateForm('vehicle_detail', e.target.value)} />}
                             </div>
 
                             <div>
@@ -290,7 +293,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                                     <OptionButton selected={form.body_condition_checkout === 'ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.body_condition_checkout === 'ไม่ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
                                 </div>
-                                {form.body_condition_checkout === 'ไม่ปกติ' && <Input placeholder="ระบุรายละเอียด" value={form.body_detail_checkout} onChange={e => updateForm('body_detail_checkout', e.target.value)} />}
+                                {form.body_condition_checkout === 'ไม่ปกติ' && <Input placeholder="ระบุอาการ" value={form.body_detail_checkout} onChange={e => updateForm('body_detail_checkout', e.target.value)} />}
                             </div>
 
                             <div>
@@ -299,7 +302,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                                     <OptionButton selected={form.route_risk === 'ปกติ'} onClick={() => updateForm('route_risk', 'ปกติ')}>ปกติ</OptionButton>
                                     <OptionButton selected={form.route_risk === 'พบจุดเสี่ยง'} onClick={() => updateForm('route_risk', 'พบจุดเสี่ยง')}>พบจุดเสี่ยง</OptionButton>
                                 </div>
-                                {form.route_risk === 'พบจุดเสี่ยง' && <Input placeholder="ระบุรายละเอียด" value={form.route_detail} onChange={e => updateForm('route_detail', e.target.value)} />}
+                                {form.route_risk === 'พบจุดเสี่ยง' && <Input placeholder="ระบุจุดเสี่ยงและรายละเอียด" value={form.route_detail} onChange={e => updateForm('route_detail', e.target.value)} />}
                             </div>
                         </div>
                     ) : (

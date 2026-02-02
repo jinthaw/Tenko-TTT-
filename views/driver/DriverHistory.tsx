@@ -14,21 +14,33 @@ interface Props {
 export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStartTime, displayTime }) => {
   const myRecords = records
     .filter(r => r.driver_id === user.id)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => {
+        // Sort by approved date if available
+        const timeA = a.checkin_timestamp ? new Date(a.checkin_timestamp).getTime() : new Date(a.date).getTime();
+        const timeB = b.checkin_timestamp ? new Date(b.checkin_timestamp).getTime() : new Date(b.date).getTime();
+        return timeB - timeA;
+    });
 
   const currentMonth = new Date();
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
 
-  // ป้องกันปัญหา Timezone โดยการสร้าง Date จาก string YYYY-MM-DD โดยตรง
-  const parseSafeDate = (dateStr: string) => {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(y, m - 1, d);
+  // Helper to determine the effective date (Check-in Approval Date > Submission Date)
+  const getRecordDateStr = (r: TenkoRecord) => {
+      if (r.checkin_timestamp) {
+          const d = new Date(r.checkin_timestamp);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+      }
+      return r.date;
   };
 
   const getDayStatus = (day: number) => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const record = myRecords.find(r => r.date === dateStr);
+    // Find record where effective date matches calendar cell
+    const record = myRecords.find(r => getRecordDateStr(r) === dateStr);
     
     if (!record) return 'none';
     if (record.checkin_status === 'approved' && record.checkout_status === 'approved') return 'complete';
@@ -40,6 +52,16 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
       if (r.checkin_status === 'approved' && r.checkout_status === 'approved') return <Badge type="approved">เสร็จสมบูรณ์</Badge>;
       if (r.checkin_status === 'approved') return <Badge type="pending">กำลังปฏิบัติงาน</Badge>;
       return <Badge type="danger">รอตรวจสอบ</Badge>;
+  };
+
+  const formatDateTime = (isoString?: string) => {
+      if (!isoString) return '-';
+      return new Date(isoString).toLocaleString('th-TH', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+      });
   };
 
   return (
@@ -58,7 +80,10 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <Card className="bg-white border-l-4 border-blue-500">
                  <p className="text-sm text-slate-500">เดือนนี้</p>
-                 <p className="text-3xl font-bold text-blue-600">{myRecords.filter(r => parseSafeDate(r.date).getMonth() === currentMonth.getMonth()).length}</p>
+                 <p className="text-3xl font-bold text-blue-600">{myRecords.filter(r => {
+                     const d = r.checkin_timestamp ? new Date(r.checkin_timestamp) : new Date(r.date);
+                     return d.getMonth() === currentMonth.getMonth();
+                 }).length}</p>
                  <p className="text-xs text-slate-400">รายการ</p>
              </Card>
              <Card className="bg-white border-l-4 border-purple-500">
@@ -101,42 +126,45 @@ export const DriverHistory: React.FC<Props> = ({ user, records, onBack, fixStart
 
         <div className="space-y-4">
             <h3 className="font-bold text-slate-700">รายการล่าสุด (10 รายการ)</h3>
-            {myRecords.slice(0, 10).map(record => (
-                <Card key={record.__backendId} className="hover:bg-slate-50 transition-colors border border-slate-100">
-                    <div className="flex justify-between items-start mb-3 border-b pb-2">
-                        <div>
-                            <p className="font-bold text-slate-800">
-                                {parseSafeDate(record.date).toLocaleDateString('th-TH', { dateStyle: 'long' })}
-                            </p>
-                            <p className="text-[10px] text-slate-400">Record ID: {record.__backendId.substring(0, 8)}</p>
-                        </div>
-                        {getStatusBadge(record)}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100">
-                            <p className="font-bold text-blue-800 text-xs mb-1 uppercase tracking-wider">ก่อนเริ่มงาน (Check-in)</p>
-                            <div className="space-y-1">
-                                <p className="flex justify-between"><span>เวลาอนุมัติ:</span> <span className="font-bold">{record.checkin_timestamp ? new Date(record.checkin_timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-'} น.</span></p>
-                                <p className="flex justify-between"><span>ผู้ตรวจ:</span> <span className="text-slate-600">{record.checkin_tenko_name || '-'}</span></p>
-                            </div>
-                        </div>
-                        <div className={`p-3 rounded-lg border ${record.checkout_status === 'approved' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
-                            <p className="font-bold text-emerald-800 text-xs mb-1 uppercase tracking-wider">หลังเลิกงาน (Check-out)</p>
-                            <div className="space-y-1">
-                                <p className="flex justify-between items-center">
-                                    <span>วัน/เวลาเลิกงาน:</span> 
-                                    <span className="font-bold text-right">
-                                        {record.checkout_timestamp 
-                                            ? new Date(record.checkout_timestamp).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) 
-                                            : '-'}
-                                    </span>
+            {myRecords.slice(0, 10).map(record => {
+                // Display effective date (Approved Date)
+                const displayDate = record.checkin_timestamp ? new Date(record.checkin_timestamp) : new Date(record.date);
+                
+                return (
+                    <Card key={record.__backendId} className="hover:bg-slate-50 transition-colors border border-slate-100">
+                        <div className="flex justify-between items-start mb-3 border-b pb-2">
+                            <div>
+                                <p className="font-bold text-slate-800">
+                                    {displayDate.toLocaleDateString('th-TH', { dateStyle: 'long' })}
                                 </p>
-                                <p className="flex justify-between"><span>ผู้ตรวจ:</span> <span className="text-slate-600">{record.checkout_tenko_name || '-'}</span></p>
+                                <p className="text-[10px] text-slate-400">Record ID: {record.__backendId.substring(0, 8)}</p>
+                            </div>
+                            {getStatusBadge(record)}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                                <p className="font-bold text-blue-800 text-xs mb-1 uppercase tracking-wider">ก่อนเริ่มงาน (Check-in)</p>
+                                <div className="space-y-1">
+                                    <p className="flex justify-between"><span>เวลาอนุมัติ:</span> <span className="font-bold">{formatDateTime(record.checkin_timestamp)} น.</span></p>
+                                    <p className="flex justify-between"><span>ผู้ตรวจ:</span> <span className="text-slate-600">{record.checkin_tenko_name || '-'}</span></p>
+                                </div>
+                            </div>
+                            <div className={`p-3 rounded-lg border ${record.checkout_status === 'approved' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                                <p className="font-bold text-emerald-800 text-xs mb-1 uppercase tracking-wider">หลังเลิกงาน (Check-out)</p>
+                                <div className="space-y-1">
+                                    <p className="flex justify-between items-center">
+                                        <span>เวลาเลิกงาน:</span> 
+                                        <span className="font-bold text-right">
+                                            {formatDateTime(record.checkout_timestamp)}
+                                        </span>
+                                    </p>
+                                    <p className="flex justify-between"><span>ผู้ตรวจ:</span> <span className="text-slate-600">{record.checkout_tenko_name || '-'}</span></p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </Card>
-            ))}
+                    </Card>
+                );
+            })}
         </div>
       </div>
     </div>
