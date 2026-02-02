@@ -238,7 +238,7 @@ export const DriverApp: React.FC<DriverAppProps> = ({ user, onLogout }) => {
                         </div>
                         <div className="flex-1">
                             <div className="flex justify-between items-start">
-                                <h3 className="font-black text-lg">พักผ่อนมากกว่า 8 ชม. เพื่อความปลอดภัย</h3>
+                                <h3 className="font-black text-lg">พักผ่อนมากกว่า 8 ชม. เพื่อความปลอดภัยเเละเริ่มงานตามเวลาfixstarttime</h3>
                                 <Badge type="neutral">RESTING</Badge>
                             </div>
                             <p className="text-sm font-bold text-indigo-800 mt-1">กรุณาพักผ่อนให้เพียงพอก่อนเริ่มงานครั้งถัดไป</p>

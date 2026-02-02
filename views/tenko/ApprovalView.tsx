@@ -33,7 +33,7 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     can_work: record.can_work || 'ได้',
     driving_violation: record.driving_violation || 'ไม่มี',
     
-    // Driver fields (for when Tenko fills them)
+    // Driver fields (defaults if missing, though we now require them from driver)
     vehicle_handover: record.vehicle_handover || 'ปกติ',
     vehicle_detail: record.vehicle_detail || '',
     body_condition_checkout: record.body_condition_checkout || 'ปกติ',
@@ -120,10 +120,14 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
     if (isAlcoholBad(form.alcohol_checkin) && !form.alcohol_checkin_reason) return alert('กรุณาระบุเหตุผลค่าแอลกอฮอล์');
     if (form.can_work === 'ไม่ได้' && !form.cannot_work_reason) return alert('กรุณาระบุสาเหตุที่วิ่งงานไม่ได้');
 
+    // Strict validation: Must have driver data for checkout
+    if (type === 'checkout' && !record.checkout_real_timestamp) {
+        return alert('ไม่สามารถอนุมัติได้: ต้องมีข้อมูลรายงานหลังเลิกงานจากพนักงานขับรถส่งเข้ามาก่อน');
+    }
+
     setSubmitting(true);
     
     try {
-        // Construct the update object carefully to avoid overwriting with unwanted defaults
         let finalRecord: TenkoRecord = { ...record, ...form } as TenkoRecord;
 
         if (type === 'checkin') {
@@ -131,8 +135,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             finalRecord.checkin_tenko_id = user.id;
             finalRecord.checkin_tenko_name = user.name;
             
-            // CRITICAL: Remove checkout fields if they came from form state defaults
-            // We use the record's existing checkout data if available (likely null for new checkin)
             finalRecord.checkout_timestamp = record.checkout_timestamp;
             finalRecord.alcohol_checkout = record.alcohol_checkout;
             finalRecord.checkout_status = record.checkout_status;
@@ -141,11 +143,6 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
             finalRecord.checkout_status = 'approved';
             finalRecord.checkout_tenko_id = user.id;
             finalRecord.checkout_tenko_name = user.name;
-            
-            // If forcing checkout (driver didn't send data), use the form time as real timestamp
-            if (!record.checkout_real_timestamp) {
-                finalRecord.checkout_real_timestamp = form.checkout_timestamp;
-            }
         }
 
         await StorageService.update(finalRecord);
@@ -274,36 +271,11 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
                  <div className="border rounded-lg p-3 relative bg-purple-50/30 border-purple-100 mt-4 pt-4">
                     <div className="absolute -top-3 left-2 bg-white px-2 text-xs font-bold text-purple-600 border border-purple-100 rounded-full">4. รายงานหลังเลิกงาน</div>
                     
-                    {!record.checkout_real_timestamp && type === 'checkout' ? (
-                        <div className="space-y-4 bg-white p-3 rounded-lg border border-purple-200 mt-2">
-                            <p className="text-xs text-amber-600 font-bold mb-2 flex items-center gap-1"><i className="fas fa-info-circle"></i> พนักงานไม่ได้ส่งข้อมูลมา เจ้าหน้าที่สามารถกรอกแทนได้</p>
-                            
-                            <div>
-                                <label className="block text-xs font-bold mb-1">4.1 การส่งมอบรถสินค้า</label>
-                                <div className="flex gap-2 mb-2">
-                                    <OptionButton selected={form.vehicle_handover === 'ปกติ'} onClick={() => updateForm('vehicle_handover', 'ปกติ')}>ปกติ</OptionButton>
-                                    <OptionButton selected={form.vehicle_handover === 'ไม่ปกติ'} onClick={() => updateForm('vehicle_handover', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
-                                </div>
-                                {form.vehicle_handover === 'ไม่ปกติ' && <Input placeholder="ระบุรายละเอียดความผิดปกติ" value={form.vehicle_detail} onChange={e => updateForm('vehicle_detail', e.target.value)} />}
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold mb-1">4.2 สภาพร่างกายหลังงาน</label>
-                                <div className="flex gap-2 mb-2">
-                                    <OptionButton selected={form.body_condition_checkout === 'ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ปกติ')}>ปกติ</OptionButton>
-                                    <OptionButton selected={form.body_condition_checkout === 'ไม่ปกติ'} onClick={() => updateForm('body_condition_checkout', 'ไม่ปกติ')}>ไม่ปกติ</OptionButton>
-                                </div>
-                                {form.body_condition_checkout === 'ไม่ปกติ' && <Input placeholder="ระบุอาการ" value={form.body_detail_checkout} onChange={e => updateForm('body_detail_checkout', e.target.value)} />}
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold mb-1">4.3 จุดเสี่ยงในเส้นทางและมาตรฐานSOP</label>
-                                <div className="flex gap-2 mb-2">
-                                    <OptionButton selected={form.route_risk === 'ปกติ'} onClick={() => updateForm('route_risk', 'ปกติ')}>ปกติ</OptionButton>
-                                    <OptionButton selected={form.route_risk === 'พบจุดเสี่ยง'} onClick={() => updateForm('route_risk', 'พบจุดเสี่ยง')}>พบจุดเสี่ยง</OptionButton>
-                                </div>
-                                {form.route_risk === 'พบจุดเสี่ยง' && <Input placeholder="ระบุจุดเสี่ยงและรายละเอียด" value={form.route_detail} onChange={e => updateForm('route_detail', e.target.value)} />}
-                            </div>
+                    {!record.checkout_real_timestamp ? (
+                         <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mt-2 text-center">
+                            <i className="fas fa-hourglass-half text-amber-500 text-3xl mb-2"></i>
+                            <h3 className="font-bold text-amber-800">รอข้อมูลจากพนักงาน</h3>
+                            <p className="text-sm text-amber-700">พนักงานยังไม่ได้ส่งรายงานหลังเลิกงานเข้ามา<br/>ไม่สามารถทำการอนุมัติได้ในขณะนี้</p>
                         </div>
                     ) : (
                         <div className="space-y-3 mt-1">
@@ -457,7 +429,12 @@ export const ApprovalView: React.FC<Props> = ({ record, user, type, onBack, onSu
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
-            <Button onClick={handleApprove} isLoading={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 py-3 text-lg">
+            <Button 
+                onClick={handleApprove} 
+                isLoading={submitting} 
+                className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 py-3 text-lg"
+                disabled={type === 'checkout' && !record.checkout_real_timestamp}
+            >
                 <i className="fas fa-save"></i> บันทึกข้อมูล (Save)
             </Button>
             
