@@ -1,9 +1,21 @@
+
 <!DOCTYPE html>
 <html lang="th">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Tenko TTT by ACT</title>
+    
+    <!-- App Icon / Favicon (SVG Data URI) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='90' fill='white' stroke='%232563eb' stroke-width='10'/%3E%3Ctext x='100' y='75' font-family='sans-serif' font-weight='bold' font-size='30' text-anchor='middle' fill='%23334155'%3ETENKO%3C/text%3E%3Ctext x='100' y='115' font-family='sans-serif' font-weight='900' font-size='42' text-anchor='middle' fill='%232563eb'%3EACT%3C/text%3E%3Cpath d='M100 165 C 60 135, 40 115, 40 95 A 20 20 0 0 1 80 95 A 20 20 0 0 1 100 115 A 20 20 0 0 1 120 95 A 20 20 0 0 1 160 95 C 160 115, 140 135, 100 165 Z' fill='%23ef4444' transform='translate(0, 15)'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='white'/%3E%3Ccircle cx='100' cy='100' r='90' fill='white' stroke='%232563eb' stroke-width='10'/%3E%3Ctext x='100' y='75' font-family='sans-serif' font-weight='bold' font-size='30' text-anchor='middle' fill='%23334155'%3ETENKO%3C/text%3E%3Ctext x='100' y='115' font-family='sans-serif' font-weight='900' font-size='42' text-anchor='middle' fill='%232563eb'%3EACT%3C/text%3E%3Cpath d='M100 165 C 60 135, 40 115, 40 95 A 20 20 0 0 1 80 95 A 20 20 0 0 1 100 115 A 20 20 0 0 1 120 95 A 20 20 0 0 1 160 95 C 160 115, 140 135, 100 165 Z' fill='%23ef4444' transform='translate(0, 15)'/%3E%3C/svg%3E">
+    
+    <!-- Web App Meta Tags -->
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tenko ACT">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,6 +23,8 @@
       body {
         font-family: 'Sarabun', sans-serif;
       }
+      /* Prevent pull-to-refresh on mobile to feel more like an app */
+      overscroll-behavior-y: none;
     </style>
   <script type="importmap">
 {
@@ -23,7 +37,7 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 text-slate-900 h-screen overflow-hidden">
+  <body class="bg-slate-50 text-slate-900 h-screen overflow-hidden select-none">
     <div id="root" class="h-full"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
